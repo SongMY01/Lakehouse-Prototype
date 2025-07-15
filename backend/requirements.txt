@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+pyspark
+pyiceberg[sql-sqlite,s3fs]
+pyarrow

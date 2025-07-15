@@ -1,0 +1,61 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/frontend/node_modules
+/.pnp
+/frontend/.pnp
+.pnp.*
+/frontend/.pnp.*
+.yarn/*
+/frontend/.yarn/*
+!.yarn/patches
+/frontend/.yarn/patches
+!.yarn/plugins
+/frontend/.yarn/plugins
+!.yarn/releases
+/frontend/.yarn/releases
+!.yarn/versions
+/frontend/.yarn/versions
+
+# testing
+/coverage
+/frontend/coverage
+
+# next.js
+/.next/
+/frontend/.next/
+/out/
+/frontend/out/
+
+# production
+/build
+/frontend/build
+
+# misc
+.DS_Store
+/frontend/.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+/frontend/.env*
+
+# vercel
+.vercel
+/frontend/.vercel
+
+# typescript
+*.tsbuildinfo
+/frontend/*.tsbuildinfo
+next-env.d.ts
+/frontend/next-env.d.ts
+
+# MinIO .minio.sys의 trash 폴더 무시
+/data/.minio.sys/tmp/.trash/
