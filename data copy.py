@@ -34,12 +34,10 @@ table = catalog.load_table(TABLE_NAME)
 # 데이터 로드 (PyArrow Table → pandas)
 arrow_table = table.scan().to_arrow()
 df = arrow_table.to_pandas()
-if 'timestamp' in df.columns:
-    df["timestamp"] = (
-        pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-        .dt.tz_convert("Asia/Seoul")
-    )
-    df = df.sort_values("timestamp", ascending=False)
+# 🔷 여기서 한국시간으로 바꿔줍니다!
+df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+df["timestamp"] = df["timestamp"].dt.tz_localize("UTC").dt.tz_convert("Asia/Seoul")
+
 
 # --- Streamlit 앱 시작 ---
 st.set_page_config(page_title="Mouse Click Events Dashboard", layout="wide")
@@ -52,5 +50,6 @@ st.subheader("📋 Raw Data")
 st.dataframe(df, use_container_width=True)
 
 st.subheader("🕒 Timestamp Distribution")
+df["timestamp"] = pd.to_datetime(df["timestamp"])
 df.set_index("timestamp", inplace=True)
 st.line_chart(df.resample("1min").size())

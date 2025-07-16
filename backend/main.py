@@ -94,7 +94,6 @@ def flush_to_iceberg():
     print(f"📦 배치 적재: {len(batch_list)}건")
 
     # RecordBatch로 변환
-    columns = list(zip(*batch_list))
     record_batch = pa.record_batch(
         [
             pa.array([row[0] for row in batch_list], type=pa.bool_()),
@@ -110,7 +109,7 @@ def flush_to_iceberg():
             pa.array([row[10] for row in batch_list], type=pa.int32()),
             pa.array([row[11] for row in batch_list], type=pa.int32()),
             pa.array([row[12] for row in batch_list], type=pa.string()),
-            pa.array([row[13] for row in batch_list], type=pa.timestamp("ms")),  # 🔷 timestamp(ms)로
+            pa.array([row[13] for row in batch_list], type=pa.timestamp("ms")),
             pa.array([row[14] for row in batch_list], type=pa.string()),
         ],
         names=[
@@ -127,14 +126,17 @@ def flush_to_iceberg():
 @app.post("/api/click")
 async def receive_click(request: Request):
     data = await request.json()
-    print(f"📋 클릭 데이터: {data}")
 
-    # timestamp 변환
-    KST = timezone(timedelta(hours=9))
-    ts_utc_ms = data.get("timestamp", 0)
-    ts_utc = datetime.fromtimestamp(ts_utc_ms / 1000, tz=timezone.utc)
-    ts_kst = ts_utc.astimezone(KST)
-    ts_kst_ms = int(ts_kst.timestamp() * 1000)
+    ts_ms = data.get('timestamp')
+    dt_utc = datetime.utcfromtimestamp(ts_ms / 1000)
+    dt_kst = dt_utc + timedelta(hours=9)
+
+    print(f"📅 클라이언트에서 받은 timestamp(ms): {ts_ms}")
+    print(f"📅 UTC 시간: {dt_utc}")
+    print(f"📅 KST 시간: {dt_kst}")
+
+    
+    print(f"📋 클릭 데이터: {data}")
 
     row = [
         data.get("altKey", False),
@@ -150,7 +152,7 @@ async def receive_click(request: Request):
         data.get("screenX", 0),
         data.get("screenY", 0),
         data.get("relatedTarget") or "",
-        ts_kst_ms,
+        int(dt_kst.timestamp() * 1000),
         data.get("type") or ""
     ]
 
