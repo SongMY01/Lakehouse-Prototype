@@ -80,7 +80,7 @@ else:
 
 # 🔷 큐 + 배치 관련 설정
 q = Queue()
-BATCH_SIZE = 10  # 원하는 건수로 설정
+BATCH_SIZE = 3  # 원하는 건수로 설정
 
 def flush_to_iceberg():
     """큐에 쌓인 데이터를 Iceberg에 배치 적재"""
@@ -126,15 +126,6 @@ def flush_to_iceberg():
 @app.post("/api/click")
 async def receive_click(request: Request):
     data = await request.json()
-
-    ts_ms = data.get('timestamp')
-    dt_utc = datetime.utcfromtimestamp(ts_ms / 1000)
-    dt_kst = dt_utc + timedelta(hours=9)
-
-    print(f"📅 클라이언트에서 받은 timestamp(ms): {ts_ms}")
-    print(f"📅 UTC 시간: {dt_utc}")
-    print(f"📅 KST 시간: {dt_kst}")
-
     
     print(f"📋 클릭 데이터: {data}")
 
@@ -152,7 +143,8 @@ async def receive_click(request: Request):
         data.get("screenX", 0),
         data.get("screenY", 0),
         data.get("relatedTarget") or "",
-        int(dt_kst.timestamp() * 1000),
+        # int(dt_kst.timestamp() * 1000),
+        data.get('timestamp',0),
         data.get("type") or ""
     ]
 
