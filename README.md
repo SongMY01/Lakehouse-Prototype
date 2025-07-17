@@ -1,6 +1,6 @@
 ---
 
-# 🧊 DataLake Prototype
+# 🧊 Lakehouse Prototype
 
 Redis Stream을 메시지 큐로 활용해 유저 이벤트를 수집하고, Apache Iceberg 테이블에 적재하는 프로토타입 애플리케이션입니다.
 
