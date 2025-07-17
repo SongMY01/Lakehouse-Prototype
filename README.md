@@ -1,23 +1,57 @@
 ---
 
-# 🧊 Iceberg Prototype
+# 🧊 DataLake Prototype
 
-유저 이벤트 데이터를 수집하고, Apache Iceberg 테이블에 적재하는 프로토타입 애플리케이션입니다.
-프론트엔드, 백엔드, 데이터 레이크(스토리지) 및 모니터링 대시보드로 구성되어 있으며,
-로컬 환경에서 Iceberg 기반 데이터 레이크를 빠르게 테스트하고 탐색할 수 있습니다.
+Redis Stream을 메시지 큐로 활용해 유저 이벤트를 수집하고, Apache Iceberg 테이블에 적재하는 프로토타입 애플리케이션입니다.
+
+로컬 환경에서 Redis와 Iceberg 기반 데이터 레이크를 빠르게 테스트하고 탐색할 수 있도록 구성되어 있으며,
+프론트엔드, 백엔드, MQ(메시지 큐), 데이터 레이크, 시각화 대시보드로 이루어져 있습니다.
 
 ---
 
-## 📦 시스템 구성
+## 📦 기술 스택 및 구성 요소
 
-| 역할                    | 기술 스택                        |
-| --------------------- | ---------------------------- |
-| **Frontend**          | React, Next.js               |
-| **Backend**           | FastAPI                      |
-| **Table Format**      | Apache Iceberg (`pyiceberg`) |
-| **Storage**           | MinIO (S3 호환 오브젝트 스토리지)      |
-| **Dashboard (데이터)**   | Streamlit (`data.py`)        |
-| **Dashboard (메타데이터)** | Streamlit (`meta.py`)        |
+### 💾 Storage
+
+* **MinIO**
+
+  * S3 호환 오브젝트 스토리지
+  * Iceberg 데이터 파일 저장소
+  * S3 API 및 웹 콘솔 제공
+
+### 🔗 Message Queue
+
+* **Redis Streams**
+
+  * 유저 이벤트 메시지 큐잉
+  * Consumer Group으로 병렬 처리 가능
+
+### 🌐 Frontend
+
+* **React + Next.js**
+
+  * 유저 이벤트를 발생시키는 웹 인터페이스
+
+### 📋 Backend
+
+* **FastAPI**
+
+  * 유저 이벤트 수신
+  * Redis Stream에 이벤트 적재
+
+### 🛠️ Data Lake
+
+* **Apache Iceberg (pyiceberg)**
+
+  * 이벤트 데이터를 테이블 포맷으로 저장
+  * 버저닝 및 데이터 관리 가능
+
+### 👀 Monitoring
+
+* **Streamlit**
+
+  * Iceberg 데이터 및 메타데이터 시각화
+  * `data.py` (데이터 대시보드), `meta.py` (메타데이터 탐색)
 
 ---
 
@@ -25,43 +59,44 @@
 
 ### 1️⃣ Storage (MinIO) 실행
 
-MinIO를 로컬에서 Docker로 실행합니다.
-데이터 파일은 지정된 디렉토리에 저장되며, S3 API 및 웹 콘솔을 제공합니다.
-
 ```bash
 docker run -d --name minio \
   -p 9000:9000 -p 9001:9001 \
   -e "MINIO_ROOT_USER=minioadmin" \
   -e "MINIO_ROOT_PASSWORD=minioadmin" \
-  -v /Users/minyoung.song/projects/bmp/workspace/my-project/data:/data \
+  -v $(pwd)/data:/data \
   minio/minio server /data --console-address ":9001"
 ```
 
-* **콘솔 UI**: [http://localhost:9001](http://localhost:9001)
-* **S3 API**: [http://localhost:9000](http://localhost:9000)
-* **기본 계정**
+* 🔗 웹 콘솔: [http://localhost:9001](http://localhost:9001)
+* 🔗 S3 API: [http://localhost:9000](http://localhost:9000)
+* 기본 계정:
 
   * ID: `minioadmin`
   * PW: `minioadmin`
 
 ---
 
-### 2️⃣ Backend (FastAPI) 실행
-
-백엔드 애플리케이션을 `uvicorn`으로 실행합니다.
+### 2️⃣ MQ (Redis) 실행
 
 ```bash
-cd backend
-uvicorn main:app --reload --port 8000
+docker run -d --name aix_redis \
+  --rm \
+  -p 6379:6379 \
+  -v $(pwd)/data:/data \
+  -v $(pwd)/scratch:/scratch \
+  redis:7.4.3
 ```
 
-* API 엔드포인트: [http://localhost:8000](http://localhost:8000)
+* Redis CLI 접속:
+
+```bash
+docker exec -it aix_redis redis-cli
+```
 
 ---
 
 ### 3️⃣ Frontend (React + Next.js) 실행
-
-프론트엔드 애플리케이션을 실행합니다.
 
 ```bash
 cd frontend
@@ -69,61 +104,66 @@ npm install
 npm run dev
 ```
 
-* 웹 인터페이스: [http://localhost:3000](http://localhost:3000)
+* 🔗 웹 인터페이스: [http://localhost:3000](http://localhost:3000)
 
 ---
 
-### 4️⃣ Dashboard (Streamlit) 실행
+### 4️⃣ Backend - 이벤트 Producer 실행
 
-#### 🔷 데이터 대시보드 (`data.py`)
+```bash
+cd backend
+uvicorn producer:app --reload --port 8000
+```
 
-Iceberg 테이블의 **최신 이벤트 데이터**를 확인하고 시계열 분포를 시각화합니다.
+* 📋 API 엔드포인트: [http://localhost:8000](http://localhost:8000)
+
+---
+
+### 5️⃣ MQ Consumer (Iceberg 적재) 실행
+
+```bash
+cd backend/mq_redis
+python consumer.py
+```
+
+---
+
+### 6️⃣ 대시보드 (Streamlit) 실행
+
+#### 📊 데이터 대시보드
 
 ```bash
 streamlit run data.py
 ```
 
-* 웹 대시보드: [http://localhost:8501](http://localhost:8501)
+* 🔗 [http://localhost:8501](http://localhost:8501)
 
----
-
-#### 🔷 메타데이터 탐색기 (`meta.py`)
-
-Iceberg 테이블의 메타데이터 및 파일 상태를 탐색합니다.
-metadata.json, manifest list, manifest 파일, parquet 데이터 파일까지 탐색할 수 있습니다.
+#### 🗂️ 메타데이터 탐색기
 
 ```bash
 streamlit run meta.py
 ```
 
-* 웹 대시보드: [http://localhost:8501](http://localhost:8501)
-
----
-
-## 🔗 주요 라이브러리 & 문서
-
-* [FastAPI](https://fastapi.tiangolo.com/) - 백엔드 API 프레임워크
-* [pyiceberg](https://py.iceberg.apache.org/) - Python용 Apache Iceberg 클라이언트
-* [MinIO](https://min.io/) - 고성능 S3 호환 오브젝트 스토리지
-* [React](https://reactjs.org/) - 프론트엔드 UI 라이브러리
-* [Next.js](https://nextjs.org/) - React 기반 SSR/SSG 프레임워크
-* [Streamlit](https://streamlit.io/) - 빠른 대시보드 빌더
+* 🔗 [http://localhost:8501](http://localhost:8501)
 
 ---
 
 ## 📂 폴더 구조
 
-```bash
+```
 .
-├── backend/               # FastAPI 서버
-│   └── main.py
-├── frontend/              # Next.js 프론트엔드
-│   └── app/page.tsx
-├── data.py                # Streamlit - 데이터 대시보드
-├── meta.py                # Streamlit - 메타데이터 탐색기
-├── README.md              # 문서
-├── warehouse/             # Iceberg 메타데이터 저장소
-│   └── pyiceberg_catalog.db
+├── backend/                   # FastAPI 서버
+│   ├── producer.py            # 이벤트 수신 API
+│   └── mq_redis/
+│       └── consumer.py        # Redis → Iceberg 컨슈머
+├── frontend/                  # Next.js 프론트엔드
+│   └── app/
+│       └── page.tsx
+├── data.py                    # Streamlit - 데이터 대시보드
+├── meta.py                    # Streamlit - 메타데이터 탐색기
+├── README.md                  # 문서
+├── warehouse/                 # Iceberg 메타데이터 저장소
+│   ├── pyiceberg_catalog.db
 │   └── mouse_events.db/…
 ```
 
@@ -131,14 +171,17 @@ streamlit run meta.py
 
 ## 📝 참고 사항
 
-* Iceberg 메타데이터는 로컬의 SQLite에 저장됩니다.
-* 데이터 파일은 MinIO(S3 호환 오브젝트 스토리지)에 저장됩니다.
-* `data.py`와 `meta.py`는 Iceberg 테이블의 **데이터와 메타데이터 상태를 빠르게 확인**하는 데 유용합니다.
+* Iceberg 메타데이터는 **로컬 SQLite**에 저장됩니다.
+* 데이터 파일은 \*\*MinIO(S3 호환 오브젝트 스토리지)\*\*에 저장됩니다.
+* 유저 이벤트는 **Redis Stream**에 쌓이고, Consumer가 이를 읽어 Iceberg에 적재합니다.
+* `data.py`, `meta.py`는 Iceberg 테이블의 **데이터 및 메타데이터 시각화**를 제공합니다.
 
 ---
 
-## 💡 Notes
+## 🧪 빠른 테스트 및 실험
 
-* `copy-on-write` 및 `merge-on-read` 전략을 테스트하기 적합합니다.
-* 다양한 Iceberg 기능을 학습하고 실습하는 데 도움이 됩니다.
-* Kubernetes 및 클라우드 환경으로 확장할 수도 있습니다.
+이 프로젝트는 **이벤트 기반 데이터 레이크 구조**를 빠르게 실험해보고 학습하고자 하는 개발자에게 적합합니다.
+
+* 이벤트 수집부터 분석까지 **로컬 환경**에서 완전한 플로우 테스트 가능
+* Redis Stream 기반 MQ → Iceberg 저장까지의 프로세스 구현 예시
+* Streamlit 대시보드를 통한 데이터 탐색 및 시각화
