@@ -1,43 +1,19 @@
-import os
-import time
-import logging
-from datetime import datetime
-
 import redis
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
+from datetime import datetime
+import time
+import os
+import threading
 
-# ──────────────────────────────
-# 🔷 로깅 설정
-# ──────────────────────────────
-logging.basicConfig(
-    filename='worker.log',
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s'
-)
-
-# ──────────────────────────────
 # 🔷 Redis 설정
-# ──────────────────────────────
 r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 STREAM_NAME = 'mouse_events'
 GROUP_NAME = 'worker-group'
 CONSUMER_NAME = 'worker-1'
 
-# Consumer Group 생성 (이미 있으면 PASS)
-try:
-    r.xgroup_create(STREAM_NAME, GROUP_NAME, id='0', mkstream=True)
-    print(f"✅ 컨슈머 그룹 생성: {GROUP_NAME}")
-except redis.exceptions.ResponseError as e:
-    if "BUSYGROUP" in str(e):
-        print(f"✅ 컨슈머 그룹 이미 존재: {GROUP_NAME}")
-    else:
-        raise e
-
-# ──────────────────────────────
 # 🔷 Iceberg 설정
-# ──────────────────────────────
 MINIO_ENDPOINT = "http://localhost:9000"
 ACCESS_KEY = "minioadmin"
 SECRET_KEY = "minioadmin"
@@ -63,36 +39,47 @@ catalog = load_catalog(
 
 table = catalog.load_table(TABLE_NAME)
 
-# ──────────────────────────────
-# 🔷 배치 처리 설정
-# ──────────────────────────────
+# 🔷 Consumer Group 생성 (없을 때만)
+try:
+    r.xgroup_create(STREAM_NAME, GROUP_NAME, id='0', mkstream=True)
+    print(f"✅ 컨슈머 그룹 생성: {GROUP_NAME}")
+except redis.exceptions.ResponseError as e:
+    if "BUSYGROUP" in str(e):
+        print(f"✅ 컨슈머 그룹 이미 존재: {GROUP_NAME}")
+    else:
+        raise e
+
 BATCH_SIZE = 10
-TIMEOUT_SEC = 60
-block_timeout_ms = 5000  # Redis BLOCK 옵션 (ms)
+TIMEOUT_SEC = 5
 
 batch = []
-ack_ids = []
+processed_ids = []
 last_flush = time.time()
 
-# ──────────────────────────────
-# 🔷 무한 루프: 메시지 처리
-# ──────────────────────────────
+
+def delete_from_stream(ids):
+    """10초 후에 Stream에서 메시지 삭제"""
+    time.sleep(5)
+    for msg_id in ids:
+        r.xdel(STREAM_NAME, msg_id)
+    print(f"🗑️ Stream에서 {len(ids)}건 삭제 완료")
+
+
 while True:
-    # Redis Stream에서 메시지 읽기
     msgs = r.xreadgroup(
         groupname=GROUP_NAME,
         consumername=CONSUMER_NAME,
         streams={STREAM_NAME: '>'},
         count=BATCH_SIZE,
-        block=block_timeout_ms
+        block=2000  # 최대 2초 대기
     )
 
     now = time.time()
 
-    # 메시지를 읽은 경우
     if msgs:
         for stream, messages in msgs:
             for msg_id, fields in messages:
+                # Redis에서 가져온 데이터 파싱
                 record = {
                     "altKey": fields.get("altKey") == "True",
                     "ctrlKey": fields.get("ctrlKey") == "True",
@@ -110,50 +97,52 @@ while True:
                     "timestamp": int(fields.get("timestamp", 0)),
                     "type": fields.get("type") or ""
                 }
+
                 batch.append(record)
-                ack_ids.append(msg_id)
+                processed_ids.append(msg_id)
 
-    # 배치 크기 or 타임아웃 도달 시 처리
-    if len(batch) >= BATCH_SIZE or (batch and now - last_flush >= TIMEOUT_SEC):
-        logging.info(f"📋 배치 적재 시작: {len(batch)}건")
-
-        try:
-            # PyArrow RecordBatch 생성
-            record_batch = pa.record_batch([
-                pa.array([r["altKey"] for r in batch], type=pa.bool_()),
-                pa.array([r["ctrlKey"] for r in batch], type=pa.bool_()),
-                pa.array([r["metaKey"] for r in batch], type=pa.bool_()),
-                pa.array([r["shiftKey"] for r in batch], type=pa.bool_()),
-                pa.array([r["button"] for r in batch], type=pa.int32()),
-                pa.array([r["buttons"] for r in batch], type=pa.int32()),
-                pa.array([r["clientX"] for r in batch], type=pa.int32()),
-                pa.array([r["clientY"] for r in batch], type=pa.int32()),
-                pa.array([r["pageX"] for r in batch], type=pa.int32()),
-                pa.array([r["pageY"] for r in batch], type=pa.int32()),
-                pa.array([r["screenX"] for r in batch], type=pa.int32()),
-                pa.array([r["screenY"] for r in batch], type=pa.int32()),
-                pa.array([r["relatedTarget"] for r in batch], type=pa.string()),
-                pa.array([r["timestamp"] for r in batch], type=pa.timestamp("ms")),
-                pa.array([r["type"] for r in batch], type=pa.string()),
-            ], names=[
-                "altKey", "ctrlKey", "metaKey", "shiftKey", "button", "buttons",
-                "clientX", "clientY", "pageX", "pageY", "screenX", "screenY",
-                "relatedTarget", "timestamp", "type"
-            ])
-
-            table_arrow = pa.Table.from_batches([record_batch])
-            table.append(table_arrow)
-
-            # Iceberg 적재 후 ack
-            for msg_id in ack_ids:
+                # ack로 pending 목록에서 제거
                 r.xack(STREAM_NAME, GROUP_NAME, msg_id)
 
-            logging.info(f"✅ Iceberg에 적재 완료 & ack: {len(batch)}건")
+    # 배치 크기 or 타임아웃 도달 시점에 적재
+    if len(batch) >= BATCH_SIZE or (batch and now - last_flush >= TIMEOUT_SEC):
+        print(f"📋 배치 적재 시작: {len(batch)}건")
 
-        except Exception as e:
-            logging.error(f"❌ Iceberg 적재 실패: {e}")
+        # Arrow RecordBatch 생성
+        record_batch = pa.record_batch([
+            pa.array([r["altKey"] for r in batch], type=pa.bool_()),
+            pa.array([r["ctrlKey"] for r in batch], type=pa.bool_()),
+            pa.array([r["metaKey"] for r in batch], type=pa.bool_()),
+            pa.array([r["shiftKey"] for r in batch], type=pa.bool_()),
+            pa.array([r["button"] for r in batch], type=pa.int32()),
+            pa.array([r["buttons"] for r in batch], type=pa.int32()),
+            pa.array([r["clientX"] for r in batch], type=pa.int32()),
+            pa.array([r["clientY"] for r in batch], type=pa.int32()),
+            pa.array([r["pageX"] for r in batch], type=pa.int32()),
+            pa.array([r["pageY"] for r in batch], type=pa.int32()),
+            pa.array([r["screenX"] for r in batch], type=pa.int32()),
+            pa.array([r["screenY"] for r in batch], type=pa.int32()),
+            pa.array([r["relatedTarget"] for r in batch], type=pa.string()),
+            pa.array([r["timestamp"] for r in batch], type=pa.timestamp("ms")),
+            pa.array([r["type"] for r in batch], type=pa.string()),
+        ], names=[
+            "altKey", "ctrlKey", "metaKey", "shiftKey", "button", "buttons",
+            "clientX", "clientY", "pageX", "pageY", "screenX", "screenY",
+            "relatedTarget", "timestamp", "type"
+        ])
 
-        # 상태 초기화
+        # Iceberg에 적재
+        table_arrow = pa.Table.from_batches([record_batch])
+        table.append(table_arrow)
+
+        print(f"✅ Iceberg에 적재 완료: {len(batch)}건")
+
+        # 10초 후에 Stream에서도 삭제 (백그라운드 스레드)
+        threading.Thread(
+            target=delete_from_stream,
+            args=(processed_ids.copy(),)
+        ).start()
+
         batch.clear()
-        ack_ids.clear()
+        processed_ids.clear()
         last_flush = now
