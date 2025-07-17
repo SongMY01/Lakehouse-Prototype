@@ -65,84 +65,88 @@ def delete_from_stream(ids):
     print(f"🗑️ Stream에서 {len(ids)}건 삭제 완료")
 
 
-while True:
-    msgs = r.xreadgroup(
-        groupname=GROUP_NAME,
-        consumername=CONSUMER_NAME,
-        streams={STREAM_NAME: '>'},
-        count=BATCH_SIZE,
-        block=2000  # 최대 2초 대기
-    )
+try:
+    while True:
+        msgs = r.xreadgroup(
+            groupname=GROUP_NAME,
+            consumername=CONSUMER_NAME,
+            streams={STREAM_NAME: '>'},
+            count=BATCH_SIZE,
+            block=2000  # 최대 2초 대기
+        )
 
-    now = time.time()
+        now = time.time()
 
-    if msgs:
-        for stream, messages in msgs:
-            for msg_id, fields in messages:
-                # Redis에서 가져온 데이터 파싱
-                record = {
-                    "altKey": fields.get("altKey") == "True",
-                    "ctrlKey": fields.get("ctrlKey") == "True",
-                    "metaKey": fields.get("metaKey") == "True",
-                    "shiftKey": fields.get("shiftKey") == "True",
-                    "button": int(fields.get("button", 0)),
-                    "buttons": int(fields.get("buttons", 0)),
-                    "clientX": int(fields.get("clientX", 0)),
-                    "clientY": int(fields.get("clientY", 0)),
-                    "pageX": int(fields.get("pageX", 0)),
-                    "pageY": int(fields.get("pageY", 0)),
-                    "screenX": int(fields.get("screenX", 0)),
-                    "screenY": int(fields.get("screenY", 0)),
-                    "relatedTarget": fields.get("relatedTarget") or "",
-                    "timestamp": int(fields.get("timestamp", 0)),
-                    "type": fields.get("type") or ""
-                }
+        if msgs:
+            for stream, messages in msgs:
+                for msg_id, fields in messages:
+                    # Redis에서 가져온 데이터 파싱
+                    record = {
+                        "altKey": fields.get("altKey") == "True",
+                        "ctrlKey": fields.get("ctrlKey") == "True",
+                        "metaKey": fields.get("metaKey") == "True",
+                        "shiftKey": fields.get("shiftKey") == "True",
+                        "button": int(fields.get("button", 0)),
+                        "buttons": int(fields.get("buttons", 0)),
+                        "clientX": int(fields.get("clientX", 0)),
+                        "clientY": int(fields.get("clientY", 0)),
+                        "pageX": int(fields.get("pageX", 0)),
+                        "pageY": int(fields.get("pageY", 0)),
+                        "screenX": int(fields.get("screenX", 0)),
+                        "screenY": int(fields.get("screenY", 0)),
+                        "relatedTarget": fields.get("relatedTarget") or "",
+                        "timestamp": int(fields.get("timestamp", 0)),
+                        "type": fields.get("type") or ""
+                    }
 
-                batch.append(record)
-                processed_ids.append(msg_id)
+                    batch.append(record)
+                    processed_ids.append(msg_id)
 
-                # ack로 pending 목록에서 제거
-                r.xack(STREAM_NAME, GROUP_NAME, msg_id)
+                    # ack로 pending 목록에서 제거
+                    r.xack(STREAM_NAME, GROUP_NAME, msg_id)
 
-    # 배치 크기 or 타임아웃 도달 시점에 적재
-    if len(batch) >= BATCH_SIZE or (batch and now - last_flush >= TIMEOUT_SEC):
-        print(f"📋 배치 적재 시작: {len(batch)}건")
+        # 배치 크기 or 타임아웃 도달 시점에 적재
+        if len(batch) >= BATCH_SIZE or (batch and now - last_flush >= TIMEOUT_SEC):
+            print(f"📋 배치 적재 시작: {len(batch)}건")
 
-        # Arrow RecordBatch 생성
-        record_batch = pa.record_batch([
-            pa.array([r["altKey"] for r in batch], type=pa.bool_()),
-            pa.array([r["ctrlKey"] for r in batch], type=pa.bool_()),
-            pa.array([r["metaKey"] for r in batch], type=pa.bool_()),
-            pa.array([r["shiftKey"] for r in batch], type=pa.bool_()),
-            pa.array([r["button"] for r in batch], type=pa.int32()),
-            pa.array([r["buttons"] for r in batch], type=pa.int32()),
-            pa.array([r["clientX"] for r in batch], type=pa.int32()),
-            pa.array([r["clientY"] for r in batch], type=pa.int32()),
-            pa.array([r["pageX"] for r in batch], type=pa.int32()),
-            pa.array([r["pageY"] for r in batch], type=pa.int32()),
-            pa.array([r["screenX"] for r in batch], type=pa.int32()),
-            pa.array([r["screenY"] for r in batch], type=pa.int32()),
-            pa.array([r["relatedTarget"] for r in batch], type=pa.string()),
-            pa.array([r["timestamp"] for r in batch], type=pa.timestamp("ms")),
-            pa.array([r["type"] for r in batch], type=pa.string()),
-        ], names=[
-            "altKey", "ctrlKey", "metaKey", "shiftKey", "button", "buttons",
-            "clientX", "clientY", "pageX", "pageY", "screenX", "screenY",
-            "relatedTarget", "timestamp", "type"
-        ])
+            # Arrow RecordBatch 생성
+            record_batch = pa.record_batch([
+                pa.array([r["altKey"] for r in batch], type=pa.bool_()),
+                pa.array([r["ctrlKey"] for r in batch], type=pa.bool_()),
+                pa.array([r["metaKey"] for r in batch], type=pa.bool_()),
+                pa.array([r["shiftKey"] for r in batch], type=pa.bool_()),
+                pa.array([r["button"] for r in batch], type=pa.int32()),
+                pa.array([r["buttons"] for r in batch], type=pa.int32()),
+                pa.array([r["clientX"] for r in batch], type=pa.int32()),
+                pa.array([r["clientY"] for r in batch], type=pa.int32()),
+                pa.array([r["pageX"] for r in batch], type=pa.int32()),
+                pa.array([r["pageY"] for r in batch], type=pa.int32()),
+                pa.array([r["screenX"] for r in batch], type=pa.int32()),
+                pa.array([r["screenY"] for r in batch], type=pa.int32()),
+                pa.array([r["relatedTarget"] for r in batch], type=pa.string()),
+                pa.array([r["timestamp"] for r in batch], type=pa.timestamp("ms")),
+                pa.array([r["type"] for r in batch], type=pa.string()),
+            ], names=[
+                "altKey", "ctrlKey", "metaKey", "shiftKey", "button", "buttons",
+                "clientX", "clientY", "pageX", "pageY", "screenX", "screenY",
+                "relatedTarget", "timestamp", "type"
+            ])
 
-        # Iceberg에 적재
-        table_arrow = pa.Table.from_batches([record_batch])
-        table.append(table_arrow)
+            # Iceberg에 적재
+            table_arrow = pa.Table.from_batches([record_batch])
+            table.append(table_arrow)
 
-        print(f"✅ Iceberg에 적재 완료: {len(batch)}건")
+            print(f"✅ Iceberg에 적재 완료: {len(batch)}건")
 
-        # 10초 후에 Stream에서도 삭제 (백그라운드 스레드)
-        threading.Thread(
-            target=delete_from_stream,
-            args=(processed_ids.copy(),)
-        ).start()
+            # 10초 후에 Stream에서도 삭제 (백그라운드 스레드)
+            threading.Thread(
+                target=delete_from_stream,
+                args=(processed_ids.copy(),)
+            ).start()
 
-        batch.clear()
-        processed_ids.clear()
-        last_flush = now
+            batch.clear()
+            processed_ids.clear()
+            last_flush = now
+
+except KeyboardInterrupt:
+    print("\n👋 컨슈머를 정상적으로 종료합니다.")
