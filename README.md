@@ -111,7 +111,7 @@ npm run dev
 ### 4️⃣ Backend - 이벤트 Producer 실행
 
 ```bash
-cd backend
+cd backend/mq_redis
 uvicorn producer:app --reload --port 8000
 ```
 
@@ -123,7 +123,7 @@ uvicorn producer:app --reload --port 8000
 
 ```bash
 cd backend/mq_redis
-python consumer.py
+python3 consumer.py
 ```
 
 ---
