@@ -41,7 +41,7 @@ async def receive_event(request: Request):
     # Redis Stream에 추가
     r.xadd(
         stream_name,
-        data_str,
+        data_str,   # type: ignore
         maxlen=MAX_STREAM_LENGTH,
         approximate=True
     )

@@ -2,17 +2,20 @@ from pyiceberg.catalog import load_catalog
 import pyarrow as pa
 import os
 
+# MinIO 및 Iceberg 설정값
 MINIO_ENDPOINT = "http://localhost:9000"
 ACCESS_KEY = "minioadmin"
 SECRET_KEY = "minioadmin"
 BUCKET_NAME = "user-events"
 warehouse_meta_path = "/Users/minyoung.song/projects/bmp/workspace/my-project/warehouse"  # 메타데이터 저장 경로
 
-CATALOG_NAME = "user_catalog"
+CATALOG_NAME = "user_catalog"  
 NAMESPACE_NAME = "user_events"
 
+# 메타데이터 저장 경로가 없으면 생성
 os.makedirs(warehouse_meta_path, exist_ok=True)
 
+# Iceberg 카탈로그 로드
 catalog = load_catalog(
     CATALOG_NAME,
     **{
@@ -26,12 +29,14 @@ catalog = load_catalog(
     }
 )
 
+# 네임스페이스가 없으면 생성
 if (NAMESPACE_NAME,) not in catalog.list_namespaces():
     catalog.create_namespace(NAMESPACE_NAME)
     print(f"✅ 네임스페이스 생성: {NAMESPACE_NAME}")
 else:
     print(f"✅ 네임스페이스 존재: {NAMESPACE_NAME}")
 
+# 클릭 이벤트용 스키마 정의
 click_schema = pa.schema([
     ("altKey", pa.bool_()),
     ("ctrlKey", pa.bool_()),
@@ -50,6 +55,7 @@ click_schema = pa.schema([
     ("type", pa.string()),
 ])
 
+# 키보드 이벤트용 스키마 정의
 keyboard_schema = pa.schema([
     ("altKey", pa.bool_()),
     ("ctrlKey", pa.bool_()),
@@ -61,6 +67,7 @@ keyboard_schema = pa.schema([
     ("type", pa.string()),
 ])
 
+# 테이블 생성 함수
 def create_table(table_name: str, schema: pa.Schema):
     full_table_name = f"{NAMESPACE_NAME}.{table_name}"
     existing_tables = [".".join(t) for t in catalog.list_tables(NAMESPACE_NAME)]
@@ -71,6 +78,7 @@ def create_table(table_name: str, schema: pa.Schema):
         catalog.create_table(full_table_name, schema=schema)
         print(f"✅ 테이블 생성: {full_table_name}")
 
+# 클릭/키보드 이벤트 테이블 생성
 create_table("click_events", click_schema)
 create_table("keydown_events", keyboard_schema)
 
