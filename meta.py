@@ -8,15 +8,28 @@ from fastavro import reader
 from pyiceberg.catalog import load_catalog
 
 # 📌 Iceberg 카탈로그 설정
-CATALOG_NAME = "mouse_catalog"
-NAMESPACE = "mouse_events"
-TABLE_NAME = f"{NAMESPACE}.click_events"
+CATALOG_NAME = "user_catalog"
+NAMESPACE = "user_events"
+DATABASE_NAME = "user_events.db"
+
+# 📌 Streamlit 테이블 선택
+st.set_page_config(page_title="Iceberg Latest Metadata Explorer", layout="wide")
+st.title("🧊 Iceberg Table Explorer")
+
+# 테이블 선택
+TABLE_OPTIONS = ["click_events", "keydown_events"]
+table_choice = st.selectbox("📋 테이블 선택", options=TABLE_OPTIONS)
+TABLE_NAME = f"{NAMESPACE}.{table_choice}"
+
+# S3 prefix 동적 설정
+data_prefix = f"{DATABASE_NAME}/{table_choice}/data/"
+metadata_prefix = f"{DATABASE_NAME}/{table_choice}/metadata/"
 
 warehouse_meta_path = "/Users/minyoung.song/projects/bmp/workspace/my-project/warehouse"
 MINIO_ENDPOINT = "http://localhost:9000"
 ACCESS_KEY = "minioadmin"
 SECRET_KEY = "minioadmin"
-BUCKET_NAME = "mouse-click"
+BUCKET_NAME = "user-events"
 
 # 📌 카탈로그 로드
 catalog = load_catalog(
@@ -33,7 +46,11 @@ catalog = load_catalog(
 )
 
 # 📌 테이블 로드
-table = catalog.load_table(TABLE_NAME)
+try:
+    table = catalog.load_table(TABLE_NAME)
+except Exception as e:
+    st.error(f"🚨 Iceberg 테이블 로드 실패: {e}")
+    st.stop()
 
 # 📌 S3 클라이언트
 s3 = boto3.client(
@@ -43,13 +60,6 @@ s3 = boto3.client(
     aws_secret_access_key=SECRET_KEY,
     region_name="us-east-1"
 )
-
-# 📌 경로
-metadata_prefix = "mouse_events.db/click_events/metadata/"
-data_prefix = "mouse_events.db/click_events/data/"
-
-st.set_page_config(page_title="Iceberg Latest Metadata Explorer", layout="wide")
-st.title("🧊 Iceberg Table Explorer")
 
 def get_latest_file(bucket, prefix, filter_fn):
     objs = s3.list_objects_v2(Bucket=bucket, Prefix=prefix).get("Contents", [])
@@ -101,15 +111,12 @@ if mf_key:
 
 # --- Data file ---
 st.header("📄 Data file")
-
 df_key = get_latest_file(BUCKET_NAME, data_prefix, lambda k: k.endswith(".parquet"))
-
 if df_key:
     st.subheader(f"📄 {df_key}")
     body = s3.get_object(Bucket=BUCKET_NAME, Key=df_key)["Body"].read()
     table = pq.read_table(io.BytesIO(body))
     df = table.to_pandas()
-    
     # KST로 timestamp 컬럼 변환
     if 'timestamp' in df.columns:
         df['timestamp'] = (
@@ -118,5 +125,4 @@ if df_key:
         )
         # 보기 좋게 정렬
         df = df.sort_values('timestamp', ascending=False)
-
     st.dataframe(df.head(50))  # 최신 50건만 보여주기
