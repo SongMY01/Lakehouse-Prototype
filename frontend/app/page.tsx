@@ -1,27 +1,13 @@
 'use client';
+import { useEffect } from "react";
 import Image from "next/image";
 
 export default function Home() {
-  const sendPayload = (e: React.MouseEvent, relatedTarget?: HTMLElement | null) => {
-    const payload = {
-      altKey: e.altKey,
-      ctrlKey: e.ctrlKey,
-      metaKey: e.metaKey,
-      shiftKey: e.shiftKey,
-      button: e.button,
-      buttons: e.buttons,
-      clientX: e.clientX,
-      clientY: e.clientY,
-      pageX: e.pageX,
-      pageY: e.pageY,
-      screenX: e.screenX,
-      screenY: e.screenY,
-      relatedTarget: relatedTarget ? relatedTarget.outerHTML : null,
-      timestamp: Date.now(),
-      type: e.type,
-    };
-
-    fetch("http://localhost:8000/api/click", {
+  /**
+   * 공통으로 payload를 보내는 함수
+   */
+  const sendPayload = (payload: Record<string, any>) => {
+    fetch("http://localhost:8000/api/event", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -39,12 +25,59 @@ export default function Home() {
       });
   };
 
+  /**
+   * 클릭 이벤트 핸들러
+   */
   const handleClick = (e: React.MouseEvent) => {
-    // 클릭한 좌표에서 가장 안쪽의 요소를 찾음
     const elemAtPoint = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-    sendPayload(e, elemAtPoint);
+
+    const payload = {
+      event_type: "click",
+      altKey: e.altKey,
+      ctrlKey: e.ctrlKey,
+      metaKey: e.metaKey,
+      shiftKey: e.shiftKey,
+      button: e.button,
+      buttons: e.buttons,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      pageX: e.pageX,
+      pageY: e.pageY,
+      screenX: e.screenX,
+      screenY: e.screenY,
+      relatedTarget: elemAtPoint ? elemAtPoint.outerHTML : null,
+      timestamp: Date.now(),
+      type: e.type,
+    };
+
+    sendPayload(payload);
     alert("백엔드에 클릭 정보가 전송되었습니다!");
   };
+
+  /**
+   * 키보드 이벤트 등록
+   */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const payload = {
+        event_type: "keydown",
+        key: e.key,
+        code: e.code,
+        altKey: e.altKey,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        metaKey: e.metaKey,
+        timestamp: Date.now(),
+        type: e.type,
+      };
+
+      sendPayload(payload);
+      console.log("키보드 이벤트 전송됨:", payload);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
