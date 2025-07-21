@@ -1,5 +1,8 @@
+import logging
 from pyiceberg.catalog import load_catalog
 import os
+
+logger = logging.getLogger(__name__)
 
 # Iceberg + MinIO 설정
 MINIO_ENDPOINT = "http://localhost:9000"
@@ -8,13 +11,13 @@ SECRET_KEY = "minioadmin"
 BUCKET_NAME = "user-events"
 WAREHOUSE_META_PATH = "./warehouse"
 
-
 CATALOG_NAME = "user_catalog"
 NAMESPACE_NAME = "user_events"
 
-# 메타데이터 디렉토리 생성
+logger.info("Ensuring warehouse metadata directory exists at %s", WAREHOUSE_META_PATH)
 os.makedirs(WAREHOUSE_META_PATH, exist_ok=True)
 
+logger.info("Loading Iceberg catalog...")
 catalog = load_catalog(
     CATALOG_NAME,
     **{
@@ -27,5 +30,4 @@ catalog = load_catalog(
         "s3.region": "us-east-1",
     }
 )
-
-
+logger.info("Iceberg catalog loaded successfully.")

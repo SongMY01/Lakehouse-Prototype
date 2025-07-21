@@ -1,11 +1,19 @@
+import os
 import redis
 import pyarrow as pa
 import threading
 import time
+import logging
 from database.redis import r
 from database.iceberg import catalog, NAMESPACE_NAME
 from schemas.click_event import click_arrow_fields
 from schemas.keydown_event import keydown_arrow_fields
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=log_level,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 GROUP_NAME = "worker-group"
 CONSUMER_NAME = "worker-1"
@@ -22,16 +30,16 @@ def delete_from_stream(stream_name, ids):
     time.sleep(5)
     for msg_id in ids:
         r.xdel(stream_name, msg_id)
-    print(f"🗑️ [{stream_name}] Stream에서 {len(ids)}건 삭제")
+    logger.info(f"🗑️ [{stream_name}] Stream에서 {len(ids)}건 삭제")
 
 
 def process_stream(stream_name):
     try:
         r.xgroup_create(stream_name, GROUP_NAME, id='0', mkstream=True)
-        print(f"✅ 컨슈머 그룹 생성: {stream_name}:{GROUP_NAME}")
+        logger.info(f"✅ 컨슈머 그룹 생성: {stream_name}:{GROUP_NAME}")
     except redis.exceptions.ResponseError as e: # type: ignore
         if "BUSYGROUP" in str(e):
-            print(f"✅ 컨슈머 그룹 이미 존재: {stream_name}:{GROUP_NAME}")
+            logger.info(f"✅ 컨슈머 그룹 이미 존재: {stream_name}:{GROUP_NAME}")
         else:
             raise e
 
@@ -82,7 +90,7 @@ def process_stream(stream_name):
                     r.xack(stream_name, GROUP_NAME, msg_id)
 
         if len(batch) >= BATCH_SIZE or (batch and now - last_flush >= TIMEOUT_SEC):
-            print(f"📋 [{stream_name}] 배치 적재 시작: {len(batch)}건")
+            logger.info(f"📋 [{stream_name}] 배치 적재 시작: {len(batch)}건")
 
             columns, names = [], []
             for name, typ in schema_fields:
@@ -118,9 +126,9 @@ def process_stream(stream_name):
             try:
                 table = catalog.load_table(table_name)
                 table.append(pa.Table.from_batches([record_batch]))
-                print(f"✅ [{stream_name}] Iceberg 적재 완료: {len(batch)}건")
+                logger.info(f"✅ [{stream_name}] Iceberg 적재 완료: {len(batch)}건")
             except Exception as e:
-                print(f"🚨 Iceberg 테이블 로드 실패: {table_name}\n{e}")
+                logger.error(f"🚨 Iceberg 테이블 로드 실패: {table_name}\n{e}")
 
             threading.Thread(
                 target=delete_from_stream,

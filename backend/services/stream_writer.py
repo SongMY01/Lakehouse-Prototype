@@ -1,4 +1,9 @@
+import os
+import logging
 from database.redis import r
+
+logger = logging.getLogger(__name__)
+
 
 MAX_STREAM_LENGTH = 10000
 
@@ -12,12 +17,16 @@ async def write_to_stream(data: dict):
     # Stream 이름 결정
     stream_name = f"{event_type}_events"
 
+    logger.debug(f"이벤트 수신: {event_type}, Stream: {stream_name}, Data: {data_str}")
+
     r.xadd(
         stream_name,
         data_str, # type: ignore
         maxlen=MAX_STREAM_LENGTH,
         approximate=True
     )
+
+    logger.debug(f"이벤트가 Redis Stream '{stream_name}'에 기록됨")
 
     return {
         "status": "queued",

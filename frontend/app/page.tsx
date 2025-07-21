@@ -2,10 +2,27 @@
 import { useEffect } from "react";
 import Image from "next/image";
 
+const logLevel = process.env.NEXT_PUBLIC_LOG_LEVEL || 'INFO';
+console.info(`📄 .env에서 읽은 LOG_LEVEL: ${logLevel}`);
+
+const log = (level: string, ...args: any[]) => {
+  const levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR'];
+  const currentIdx = levels.indexOf(logLevel);
+  const msgIdx = levels.indexOf(level);
+
+  const consoleMap: Record<string, (...args: any[]) => void> = {
+    debug: console.debug,
+    info: console.info,
+    warning: console.warn,
+    error: console.error,
+  };
+
+  if (msgIdx >= currentIdx) {
+    consoleMap[level.toLowerCase()](...args);
+  }
+};
+
 export default function Home() {
-  /**
-   * 공통으로 payload를 보내는 함수
-   */
   const sendPayload = (payload: Record<string, any>) => {
     fetch("http://localhost:8000/api/events", {
       method: "POST",
@@ -16,18 +33,16 @@ export default function Home() {
     })
       .then((res) => {
         if (!res.ok) {
+          log('ERROR', "전송 실패!");
           alert("전송 실패!");
         }
       })
       .catch((err) => {
-        console.error(err);
+        log('ERROR', "에러 발생:", err);
         alert("에러 발생!");
       });
   };
 
-  /**
-   * 클릭 이벤트 핸들러
-   */
   const handleClick = (e: React.MouseEvent) => {
     const elemAtPoint = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
 
@@ -51,12 +66,10 @@ export default function Home() {
     };
 
     sendPayload(payload);
+    log('INFO', "백엔드에 클릭 정보 전송:", payload);
     alert("백엔드에 클릭 정보가 전송되었습니다!");
   };
 
-  /**
-   * 키보드 이벤트 등록
-   */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const payload = {
@@ -72,7 +85,7 @@ export default function Home() {
       };
 
       sendPayload(payload);
-      console.log("키보드 이벤트 전송됨:", payload);
+      log('DEBUG', "키보드 이벤트 전송:", payload);
     };
 
     window.addEventListener("keydown", handleKeyDown);
