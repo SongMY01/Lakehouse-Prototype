@@ -29,7 +29,7 @@ def process_stream(stream_name):
     try:
         r.xgroup_create(stream_name, GROUP_NAME, id='0', mkstream=True)
         print(f"✅ 컨슈머 그룹 생성: {stream_name}:{GROUP_NAME}")
-    except redis.exceptions.ResponseError as e:
+    except redis.exceptions.ResponseError as e: # type: ignore
         if "BUSYGROUP" in str(e):
             print(f"✅ 컨슈머 그룹 이미 존재: {stream_name}:{GROUP_NAME}")
         else:
@@ -51,7 +51,7 @@ def process_stream(stream_name):
         now = time.time()
 
         if msgs:
-            for _, messages in msgs:
+            for _, messages in msgs: # type: ignore
                 for msg_id, fields in messages:
                     event_type = stream_name.replace("_events", "")
                     table_name = f"{NAMESPACE_NAME}.{event_type}_events"
