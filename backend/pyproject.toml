@@ -1,0 +1,19 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Backend service for event processing pipeline"
+readme = "README.md"
+requires-python = ">=3.13"
+
+dependencies = [
+    # Web framework
+    "fastapi>=0.116.1",
+    "uvicorn>=0.35.0",
+
+    # Data processing
+    "pyarrow>=21.0.0",
+    "pyiceberg[sql-sqlite]>=0.9.1",
+
+    # Messaging / Storage
+    "redis>=6.2.0",
+]
