@@ -57,14 +57,12 @@ yarn-error.log*
 next-env.d.ts
 /frontend/next-env.d.ts
 
-# MinIO .minio.sys의 trash 폴더 무시
-data/.minio.sys/
 
 # data 폴더 전체 무시
 /data/
 
-# warehouse
-/warehouse/
-
-# backend의 __pycache__ 폴더 무시
-/backend/__pycache__/
+# backend specific ignores
+/backend/warehouse/
+__pycache__/
+*.pyc
+.env

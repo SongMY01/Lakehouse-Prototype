@@ -7,7 +7,7 @@ export default function Home() {
    * 공통으로 payload를 보내는 함수
    */
   const sendPayload = (payload: Record<string, any>) => {
-    fetch("http://localhost:8000/api/event", {
+    fetch("http://localhost:8000/api/events", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
