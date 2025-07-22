@@ -62,7 +62,7 @@ next-env.d.ts
 /data/
 
 # backend specific ignores
-/backend/warehouse/
+/backend/db/
 __pycache__/
 *.pyc
 .env
