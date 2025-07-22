@@ -4,8 +4,8 @@ import pyarrow as pa
 import threading
 import time
 import logging
-from database.redis import r
-from database.iceberg import catalog, NAMESPACE_NAME
+from config.redis import r
+from config.iceberg import catalog, NAMESPACE_NAME
 from schemas.click_event import click_arrow_fields
 from schemas.keydown_event import keydown_arrow_fields
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()

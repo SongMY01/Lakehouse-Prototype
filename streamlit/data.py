@@ -7,7 +7,7 @@ from pyiceberg.catalog import load_catalog
 CATALOG_NAME = "user_catalog"
 NAMESPACE = "user_events"
 
-warehouse_meta_path = "../backend/warehouse"
+warehouse_meta_path = "../backend/db/warehouse"
 MINIO_ENDPOINT = "http://localhost:9000"
 ACCESS_KEY = "minioadmin"
 SECRET_KEY = "minioadmin"

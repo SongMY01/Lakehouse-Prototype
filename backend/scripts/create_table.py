@@ -1,7 +1,7 @@
 import logging
 import os
 from dotenv import load_dotenv
-from database.iceberg import catalog, NAMESPACE_NAME
+from config.iceberg import catalog, NAMESPACE_NAME
 from schemas.click_event import click_arrow_fields
 from schemas.keydown_event import keydown_arrow_fields
 import pyarrow as pa

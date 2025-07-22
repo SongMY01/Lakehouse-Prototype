@@ -1,6 +1,6 @@
 import os
 import logging
-from database.redis import r
+from config.redis import r
 
 logger = logging.getLogger(__name__)
 

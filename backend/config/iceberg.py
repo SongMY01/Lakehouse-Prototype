@@ -9,7 +9,7 @@ MINIO_ENDPOINT = "http://localhost:9000"
 ACCESS_KEY = "minioadmin"
 SECRET_KEY = "minioadmin"
 BUCKET_NAME = "user-events"
-WAREHOUSE_META_PATH = "./warehouse"
+WAREHOUSE_META_PATH = "./db/warehouse"
 
 CATALOG_NAME = "user_catalog"
 NAMESPACE_NAME = "user_events"

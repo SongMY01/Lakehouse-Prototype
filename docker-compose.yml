@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env
+
+  event_loader:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: event_loader
+    command: uv run backend/services/event_loader.py
+    depends_on:
+      - backend
+      - redis
+    env_file:
+      - backend/.env
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: streamlit/Dockerfile
+    container_name: streamlit
+    ports:
+      - "8501:8501"
+
+  frontend:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "3000:3000"
+    command: npm run dev
+    depends_on:
+      - backend
