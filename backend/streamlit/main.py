@@ -1,24 +1,36 @@
+import logging
 import streamlit as st
 import pandas as pd
 from pyiceberg.catalog import load_catalog
+from pathlib import Path
+import os
+
+
+logger = logging.getLogger(__name__)
+
+MINIO_ENDPOINT = "http://minio:9000"
+ACCESS_KEY = "minioadmin"
+SECRET_KEY = "minioadmin"
+BUCKET_NAME = "user-events"
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
+WAREHOUSE_META_PATH = BASE_DIR / "db/warehouse"
 
 
 # 📌 Iceberg 카탈로그 설정
 CATALOG_NAME = "user_catalog"
 NAMESPACE = "user_events"
 
-warehouse_meta_path = "../backend/db/warehouse"
-MINIO_ENDPOINT = "http://localhost:9000"
-ACCESS_KEY = "minioadmin"
-SECRET_KEY = "minioadmin"
-BUCKET_NAME = "user-events"
+logger.info("Ensuring warehouse metadata directory exists at %s", WAREHOUSE_META_PATH)
+os.makedirs(WAREHOUSE_META_PATH, exist_ok=True)
 
 # 카탈로그 로드
 catalog = load_catalog(
     CATALOG_NAME,
     **{
         "type": "sql",
-        "uri": f"sqlite:///{warehouse_meta_path}/pyiceberg_catalog.db",
+        "uri": f"sqlite:///{WAREHOUSE_META_PATH}/pyiceberg_catalog.db",
         "warehouse": f"s3://{BUCKET_NAME}",
         "s3.endpoint": MINIO_ENDPOINT,
         "s3.access-key-id": ACCESS_KEY,

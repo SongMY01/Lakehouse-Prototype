@@ -1,15 +1,18 @@
 import logging
 from pyiceberg.catalog import load_catalog
 import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # Iceberg + MinIO 설정
-MINIO_ENDPOINT = "http://localhost:9000"
+MINIO_ENDPOINT = "http://minio:9000"
 ACCESS_KEY = "minioadmin"
 SECRET_KEY = "minioadmin"
 BUCKET_NAME = "user-events"
-WAREHOUSE_META_PATH = "./db/warehouse"
+
+BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
+WAREHOUSE_META_PATH = BASE_DIR / "db/warehouse"
 
 CATALOG_NAME = "user_catalog"
 NAMESPACE_NAME = "user_events"
