@@ -125,8 +125,6 @@ def delete_from_stream(stream_name, ids):
     logger.info(f"🗑️ [{stream_name}] Stream에서 {len(ids)}건 삭제")
 
 
-# --- 리팩토링: 컨슈머 그룹 생성, 메시지 처리, 배치 적재 함수화 ---
-
 def ensure_consumer_group(stream_name):
     """
     지정한 Redis Stream에 컨슈머 그룹이 없으면 생성
