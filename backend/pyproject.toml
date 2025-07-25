@@ -18,6 +18,7 @@ dependencies = [
     "streamlit>=1.47.0",
     "pytest>=8.4.1",
     "trio>=0.30.0",
+    "boto3>=1.39.13",
 ]
 
 [tool.setuptools.packages.find]

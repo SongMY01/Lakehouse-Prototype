@@ -59,12 +59,11 @@ next-env.d.ts
 
 
 # data 폴더 전체 무시
-/data/
+/notebooks/
+/warehouse/
 
 # backend specific ignores
-/backend/db/minIO/data/
-/backend/db/redis/data/
-/backend/db/warehouse/pyiceberg_catalog.db
+/backend/db/
 
 __pycache__/
 *.pyc

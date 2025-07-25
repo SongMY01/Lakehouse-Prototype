@@ -1,216 +1,211 @@
 # -*- coding: utf-8 -*-
-# file: services/event_loader.py
-# desc: Redis Stream에서 이벤트를 읽어 Iceberg에 적재하는 배치 로더
-# author: minyoung.song
-# created: 2025-07-23
+# file: redis_to_iceberg.py
+# desc: Redis Stream → Iceberg 적재 파이프라인 (모든 구성 포함)
+# author: 송민영
+# created: 2025-07-25
 
 import os
-import glob
-import threading
+import boto3
 import time
 import logging
+import threading
+import glob
 import importlib
 import redis
 import pyarrow as pa
+from typing import Optional, List, Tuple
+from pydantic import BaseModel
 
-from config.redis import r
-from config.rest import catalog, NAMESPACE_NAME
+from pyiceberg.catalog import load_catalog
+from config.rest import catalog, NAMESPACE_NAME, CATALOG_NAME
 
-# 🔷 로깅 설정
-log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=log_level,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+
+# 로깅 설정
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
-# 🔷 컨슈머 그룹 및 배치 설정
+
+# MinIO 연결 확인
+def check_minio_connection():
+    try:
+        s3 = boto3.client(
+            's3',
+            endpoint_url=os.getenv("CATALOG_S3_ENDPOINT", "http://minio:9000"),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        )
+        buckets = s3.list_buckets()
+        logger.info(f"✅ MinIO 연결 성공: {[b['Name'] for b in buckets.get('Buckets', [])]}")
+    except Exception as e:
+        logger.error(f"🚨 MinIO 연결 실패: {e}")
+
+check_minio_connection()
+
+# Redis 연결
+try:
+    r = redis.Redis(host='sv_redis', port=6379, decode_responses=True)
+    r.ping()
+    logger.info("✅ Redis 연결 성공")
+except Exception as e:
+    logger.error(f"🚨 Redis 연결 실패: {e}")
+
+# 공통 상수
 GROUP_NAME = "worker-group"
-CONSUMER_NAME = "worker-1"
-BATCH_SIZE = 10
-TIMEOUT_SEC = 5
+BATCH_SIZE = 100
 
-# 🔷 schemas 폴더의 스키마 모듈을 자동 로드해 SCHEMAS 구성
+# ---------------------------- SCHEMAS ----------------------------
+
+class ClickEvent(BaseModel):
+    altKey: Optional[bool] = False
+    ctrlKey: Optional[bool] = False
+    metaKey: Optional[bool] = False
+    shiftKey: Optional[bool] = False
+    timestamp: int
+    type: str
+    event_type: str = "click"
+    button: Optional[int]
+    buttons: Optional[int]
+    clientX: Optional[int]
+    clientY: Optional[int]
+    pageX: Optional[int]
+    pageY: Optional[int]
+    screenX: Optional[int]
+    screenY: Optional[int]
+    relatedTarget: Optional[str]
+
+def click_arrow_fields() -> List[Tuple[str, pa.DataType]]:
+    return [
+        ("altKey", pa.bool_()),
+        ("ctrlKey", pa.bool_()),
+        ("metaKey", pa.bool_()),
+        ("shiftKey", pa.bool_()),
+        ("button", pa.int32()),
+        ("buttons", pa.int32()),
+        ("clientX", pa.int32()),
+        ("clientY", pa.int32()),
+        ("pageX", pa.int32()),
+        ("pageY", pa.int32()),
+        ("screenX", pa.int32()),
+        ("screenY", pa.int32()),
+        ("relatedTarget", pa.string()),
+        ("timestamp", pa.timestamp("ms")),
+        ("type", pa.string()),
+    ]
+
+class KeydownEvent(BaseModel):
+    altKey: Optional[bool] = False
+    ctrlKey: Optional[bool] = False
+    metaKey: Optional[bool] = False
+    shiftKey: Optional[bool] = False
+    timestamp: int
+    type: str
+    event_type: str = "keydown"
+    key: str
+    code: str
+
+def keydown_arrow_fields() -> List[Tuple[str, pa.DataType]]:
+    return [
+        ("altKey", pa.bool_()),
+        ("ctrlKey", pa.bool_()),
+        ("metaKey", pa.bool_()),
+        ("shiftKey", pa.bool_()),
+        ("key", pa.string()),
+        ("code", pa.string()),
+        ("timestamp", pa.timestamp("ms")),
+        ("type", pa.string()),
+    ]
+
+# ---------------------------- SCHEMA AUTO-LOADER ----------------------------
+
 SCHEMAS = {}
-schemas_path = os.path.join(os.path.dirname(__file__), "..", "schemas")
-schema_files = glob.glob(os.path.join(schemas_path, "*_event.py"))
+schema_funcs = {
+    "click": click_arrow_fields,
+    "keydown": keydown_arrow_fields
+}
 
-for f in schema_files:
-    basename = os.path.basename(f).replace(".py", "")
-    event_type = basename.replace("_event", "")
-    module_name = f"schemas.{basename}"
-    mod = importlib.import_module(module_name)
-    arrow_func = getattr(mod, f"{event_type}_arrow_fields")
-    SCHEMAS[event_type] = arrow_func()
+for event_type, func in schema_funcs.items():
+    SCHEMAS[event_type] = func()
+
+# ---------------------------- RECORD & STREAM 처리 ----------------------------
 
 def convert_to_record(fields, schema_fields):
-    """
-    Redis 메시지를 Iceberg 스키마에 맞는 레코드(dict)로 변환
-
-    Args:
-        fields (dict): Redis에서 읽은 데이터
-        schema_fields (List[Tuple[str, pa.DataType]]): Iceberg 테이블 스키마
-
-    Returns:
-        dict: Iceberg에 적재 가능한 레코드
-    """
     record = {}
     for k, typ in schema_fields:
         v = fields.get(k)
-        # 타입에 맞게 안전하게 변환
         if typ == pa.bool_():
             record[k] = True if v == "True" else False
-        elif typ == pa.int32():
+        elif typ in [pa.int32(), pa.int64(), pa.timestamp("ms")]:
             try:
                 record[k] = int(v) if v not in [None, ""] else 0
-            except (ValueError, TypeError):
-                record[k] = 0
-        elif typ == pa.timestamp("ms"):
-            try:
-                record[k] = int(v) if v not in [None, ""] else 0
-            except (ValueError, TypeError):
+            except Exception:
                 record[k] = 0
         else:
             record[k] = v if v is not None else ""
     return record
 
 def create_record_batch(batch, schema_fields):
-    """
-    batch 데이터를 PyArrow RecordBatch로 생성
-
-    Args:
-        batch (List[dict]): 변환된 레코드 리스트
-        schema_fields (List[Tuple[str, pa.DataType]]): Iceberg 테이블 스키마
-
-    Returns:
-        pyarrow.RecordBatch: Iceberg에 적재할 RecordBatch
-    """
     columns, names = [], []
     for name, typ in schema_fields:
         col = []
         for r_ in batch:
             val = r_.get(name)
-            if typ == pa.int32():
-                if val in [None, ""]:
-                    val = 0
-                elif not isinstance(val, int):
-                    try:
-                        val = int(val)
-                    except (ValueError, TypeError):
-                        val = 0
-            if typ == pa.bool_():
-                val = bool(val) if val not in [None, ""] else False
-            if typ == pa.string() and val is None:
-                val = ""
-            if typ == pa.timestamp("ms"):
-                if val in [None, ""]:
-                    val = 0
-                elif not isinstance(val, int):
-                    try:
-                        val = int(val)
-                    except (ValueError, TypeError):
-                        val = 0
+            if typ in [pa.int32(), pa.int64(), pa.timestamp("ms")]:
+                val = 0 if val in [None, ""] else int(val)
+            elif typ == pa.bool_():
+                val = bool(val)
+            elif typ == pa.string():
+                val = val or ""
             col.append(val)
         columns.append(pa.array(col, type=typ))
         names.append(name)
-    return pa.record_batch(columns, names=names)
-
-def delete_from_stream(stream_name, ids):
-    """
-    Iceberg 적재 완료 후 Redis에서 메시지 삭제
-    """
-    time.sleep(5)  # 적재 안정성을 위해 대기
-    for msg_id in ids:
-        r.xdel(stream_name, msg_id)
-    logger.info(f"🗑️ [{stream_name}] Stream에서 {len(ids)}건 삭제")
-
+    return pa.RecordBatch.from_arrays(columns, schema=pa.schema([
+        pa.field(name, typ, nullable=False) for name, typ in zip(names, [typ for _, typ in schema_fields])
+    ]))
 
 def ensure_consumer_group(stream_name):
-    """
-    지정한 Redis Stream에 컨슈머 그룹이 없으면 생성
-    """
     try:
         r.xgroup_create(stream_name, GROUP_NAME, id='0', mkstream=True)
-        logger.info(f"✅ 컨슈머 그룹 생성: {stream_name}:{GROUP_NAME}")
-    except redis.exceptions.ResponseError as e:
-        if "BUSYGROUP" in str(e):
-            logger.info(f"✅ 컨슈머 그룹 이미 존재: {stream_name}:{GROUP_NAME}")
-        else:
-            raise e
-
-def process_messages(msgs, stream_name, batch, ids):
-    """
-    Redis 메시지를 읽어 배치에 추가하고 ack 처리
-    """
-    table_name = None
-    schema_fields = None
-    for _, messages in msgs:
-        for msg_id, fields in messages:
-            event_type = stream_name.replace("_events", "")
-            table_name = f"{NAMESPACE_NAME}.{event_type}_events"
-            schema_fields = SCHEMAS[event_type]
-
-            record = convert_to_record(fields, schema_fields)
-            batch.append(record)
-            ids.append(msg_id)
-            r.xack(stream_name, GROUP_NAME, msg_id)
-    # 마지막 메시지에 필요한 메타데이터 반환
-    if batch:
-        return table_name, schema_fields
-    return None, None
-
-def write_batch_to_iceberg(batch, schema_fields, table_name, stream_name):
-    """
-    배치를 Iceberg에 적재하고 Redis 메시지를 삭제
-    """
-    logger.info(f"📋 [{stream_name}] 배치 적재 시작: {len(batch)}건")
-    record_batch = create_record_batch(batch, schema_fields)
-    try:
-        table = catalog.load_table(table_name)
-        table.append(pa.Table.from_batches([record_batch]))
-        logger.info(f"✅ [{stream_name}] Iceberg 적재 완료: {len(batch)}건")
+        logger.info(f"✅ 어플 구도 생성: {stream_name}:{GROUP_NAME}")
     except Exception as e:
-        logger.error(f"🚨 Iceberg 테이블 로드 실패: {table_name}\n{e}")
+        if "BUSYGROUP" in str(e):
+            logger.info(f"✅ 어플 구도 기존: {stream_name}:{GROUP_NAME}")
+        else:
+            logger.error(f"🚨 어플 구도 생성 실패: {stream_name}: {e}")
 
 def process_stream(stream_name):
-    """
-    지정된 Redis Stream에서 배치 단위로 읽어 Iceberg에 적재
-    """
+    logger.info(f"🚀 스트림 소비 시작: {stream_name}")
     ensure_consumer_group(stream_name)
-
-    batch, ids = [], []
-    last_flush = time.time()
-    table_name, schema_fields = None, None
+    event_type = stream_name.replace("_events", "")      
+    table = catalog.load_table(f"{NAMESPACE_NAME}.{event_type}_events")
+    schema_fields = SCHEMAS[event_type]
 
     while True:
-        msgs = r.xreadgroup(
-            groupname=GROUP_NAME,
-            consumername=CONSUMER_NAME,
-            streams={stream_name: '>'},
-            count=BATCH_SIZE,
-            block=2000
-        )
-        now = time.time()
-        if msgs:
-            table_name, schema_fields = process_messages(msgs, stream_name, batch, ids)
+        try:
+            resp = r.xreadgroup(GROUP_NAME, "consumer-1", {stream_name: ">"}, count=BATCH_SIZE, block=5000)
+            if not resp:
+                continue
 
-        if len(batch) >= BATCH_SIZE or (batch and now - last_flush >= TIMEOUT_SEC):
-            if table_name and schema_fields:
-                write_batch_to_iceberg(batch, schema_fields, table_name, stream_name)
-            else:
-                logger.warning(f"🚨 [{stream_name}] 배치 적재 정보 누락 (table_name or schema_fields 없음)")
+            batch, ids = [], []
+            for _, messages in resp:
+                for msg_id, fields in messages:
+                    record = convert_to_record(fields, schema_fields)
+                    batch.append(record)
+                    ids.append(msg_id)
 
-            threading.Thread(
-                target=delete_from_stream,
-                args=(stream_name, ids.copy(),)
-            ).start()
-            batch.clear()
-            ids.clear()
-            last_flush = now
+            if batch:
+                rb = create_record_batch(batch, schema_fields)
+                table.append(pa.Table.from_batches([rb]))
+                logger.info(f"📋 [{stream_name}] 배치 적재 완료: {len(batch)}개")
+                r.xack(stream_name, GROUP_NAME, *ids)
+
+        except Exception as e:
+            logger.error(f"🚨 스트림 처리 실패: {stream_name}: {e}")
+            time.sleep(2)
+
+# ---------------------------- MAIN ----------------------------
 
 if __name__ == "__main__":
-    # schemas 폴더의 *_event.py 파일을 기반으로 Stream 이름을 생성해 각 Stream을 독립 쓰레드에서 실행
-    streams = [os.path.basename(f).replace("_event.py", "_events") for f in schema_files]
+    streams = [f"{k}_events" for k in SCHEMAS.keys()]
     threads = []
     for stream in streams:
         t = threading.Thread(target=process_stream, args=(stream,))

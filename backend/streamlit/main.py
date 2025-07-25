@@ -18,14 +18,14 @@ logger = logging.getLogger(__name__)
 MINIO_ENDPOINT = "http://minio:9000"
 ACCESS_KEY = "minioadmin"
 SECRET_KEY = "minioadmin"
-BUCKET_NAME = "user-events"
+BUCKET_NAME = "warehouse"
 
 # 🔷 메타데이터 경로 설정 (backend/ 기준)
 BASE_DIR = Path(__file__).resolve().parent.parent
 WAREHOUSE_META_PATH = BASE_DIR / "db/warehouse"
 
 # 🔷 Iceberg 카탈로그 설정
-CATALOG_NAME = "user_catalog"
+CATALOG_NAME = "default"
 NAMESPACE = "user_events"
 
 # 🔷 Iceberg 메타데이터 디렉토리 생성
@@ -47,10 +47,14 @@ os.makedirs(WAREHOUSE_META_PATH, exist_ok=True)
 # )
 
 catalog = load_catalog(
-    name="rest",
-    uri="http://rest:8181",
-    warehouse="s3://rest-bucket"
+    name=CATALOG_NAME,
+    uri="http://iceberg-rest:8181",
+    type="rest",
+    s3__access_key_id="admin",
+    s3__secret_access_key="password",
+    # s3__path_style_access="true"
 )
+
 
 # --- Streamlit 앱 시작 ---
 st.set_page_config(page_title="User Events Dashboard", layout="wide")

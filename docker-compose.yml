@@ -8,6 +8,7 @@ services:
       - ./backend/db/redis/data:/data
     networks:
       - my-network
+      iceberg_net:
 
   minio:
     image: minio/minio
