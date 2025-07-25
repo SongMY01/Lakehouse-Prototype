@@ -7,6 +7,7 @@
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema, NestedField
 from pyiceberg.types import BooleanType, IntegerType, StringType, TimestampType
+from config.rest import catalog, NAMESPACE_NAME
 
 
 def define_click_schema():
@@ -55,8 +56,6 @@ def create_table(catalog, table_name: str, schema: Schema):
 
 def main():
     print("📚 Loading Iceberg catalog...")
-
-    catalog = load_catalog("default")  
 
     create_table(catalog, "user_events.click_events", define_click_schema())
     create_table(catalog, "user_events.keydown_events", define_keyboard_schema())
