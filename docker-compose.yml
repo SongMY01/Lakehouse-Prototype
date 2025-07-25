@@ -7,50 +7,83 @@ services:
     volumes:
       - ./backend/db/redis/data:/data
     networks:
-      - my-network
-      iceberg_net:
-
-  minio:
-    image: minio/minio
-    container_name: sv_minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9001"
-    volumes:
-      - ./backend/db/minIO/data:/data
+      - iceberg_net
+  
+  spark-iceberg:
+    image: tabulario/spark-iceberg
+    container_name: spark-iceberg
     networks:
-      - my-network
+      iceberg_net:
+    depends_on:
+      - rest
+      - minio
+    volumes:
+      - ./warehouse:/home/iceberg/warehouse
+      - ./notebooks:/home/iceberg/notebooks/notebooks
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
+      - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
+      - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
+
+    ports:
+      - 8888:8888
+      - 8080:8080
 
   rest:
-    image: tabulario/iceberg-rest:latest
-    container_name: sv_rest
-    ports:
-      - "8181:8181"
-    environment:
-      AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      JAVA_TOOL_OPTIONS: "-Daws.s3.path-style-access=true"
-      CATALOG_CATALOG_IMPL: org.apache.iceberg.jdbc.JdbcCatalog
-      CATALOG_URI: jdbc:sqlite:/tmp/catalog.db
-      CATALOG_WAREHOUSE: s3://rest-bucket
-      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
-      CATALOG_S3_ENDPOINT: http://minio:9000
-      CATALOG_S3_ACCESS__KEY__ID: minioadmin
-      CATALOG_S3_SECRET__ACCESS__KEY: minioadmin
-      CATALOG_S3_PATH__STYLE__ACCESS: "true"
-      CATALOG_S3_REGION: us-east-1
-      CATALOG_S3_ACCESS_KEY_ID: minioadmin
-      CATALOG_S3_SECRET_ACCESS_KEY: minioadmin
-      CATALOG_IO_IMPL: org.apache.iceberg.aws.s3.S3FileIO
+    image: tabulario/iceberg-rest
+    container_name: iceberg-rest
     networks:
-      - my-network
-    depends_on:
-      - minio
+      iceberg_net:
+    ports:
+      - 8181:8181
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - CATALOG_WAREHOUSE=s3://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+
+  minio:
+      image: minio/minio
+      container_name: minio
+      environment:
+        - MINIO_ROOT_USER=admin
+        - MINIO_ROOT_PASSWORD=password
+        - MINIO_DOMAIN=minio
+      networks:
+        iceberg_net:
+          aliases:
+            - warehouse.minio
+      ports:
+        - 9001:9001
+        - 9000:9000
+      command: ["server", "/data", "--console-address", ":9001"]
+
+  mc:
+        depends_on:
+          - minio
+        image: minio/mc
+        container_name: mc
+        networks:
+          iceberg_net:
+        environment:
+          - AWS_ACCESS_KEY_ID=admin
+          - AWS_SECRET_ACCESS_KEY=password
+          - AWS_REGION=us-east-1
+        entrypoint: > 
+          /bin/sh -c "
+          until (/usr/bin/mc alias set minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
+          /usr/bin/mc rm -r --force minio/warehouse;
+          /usr/bin/mc mb minio/warehouse;
+          /usr/bin/mc anonymous set download minio/warehouse;
+          /usr/bin/mc admin policy set minio readwrite user=admin;
+          tail -f /dev/null
+          "
 
   backend:
     build:
@@ -64,7 +97,7 @@ services:
       - redis
       - minio
     networks:
-      - my-network
+      iceberg_net:
 
   event_loader:
     build:
@@ -74,7 +107,15 @@ services:
     volumes:
       - ./backend:/app
     networks:
-      - my-network
+      iceberg_net:
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
+      - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
+      - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
 
   streamlit:
     build:
@@ -86,11 +127,17 @@ services:
       - ./backend:/app
     ports:
       - "8501:8501"
-    depends_on:
-      - backend
-
     networks:
-      - my-network
+      iceberg_net:
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
+      - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
+      - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
+
 
   frontend:
     build: ./frontend
@@ -100,8 +147,8 @@ services:
     depends_on:
       - backend
     networks:
-      - my-network
+      iceberg_net:
 
 networks:
-  my-network:
-    external: true
+  iceberg_net:
+    driver: bridge
