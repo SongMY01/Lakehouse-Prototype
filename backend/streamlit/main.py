@@ -32,18 +32,24 @@ NAMESPACE = "user_events"
 logger.info("Ensuring warehouse metadata directory exists at %s", WAREHOUSE_META_PATH)
 os.makedirs(WAREHOUSE_META_PATH, exist_ok=True)
 
-# 🔷 Iceberg 카탈로그 로드
+# # 🔷 Iceberg 카탈로그 로드
+# catalog = load_catalog(
+#     CATALOG_NAME,
+#     **{
+#         "type": "sql",
+#         "uri": f"sqlite:///{WAREHOUSE_META_PATH}/pyiceberg_catalog.db",
+#         "warehouse": f"s3://{BUCKET_NAME}",
+#         "s3.endpoint": MINIO_ENDPOINT,
+#         "s3.access-key-id": ACCESS_KEY,
+#         "s3.secret-access-key": SECRET_KEY,
+#         "s3.region": "us-east-1",
+#     }
+# )
+
 catalog = load_catalog(
-    CATALOG_NAME,
-    **{
-        "type": "sql",
-        "uri": f"sqlite:///{WAREHOUSE_META_PATH}/pyiceberg_catalog.db",
-        "warehouse": f"s3://{BUCKET_NAME}",
-        "s3.endpoint": MINIO_ENDPOINT,
-        "s3.access-key-id": ACCESS_KEY,
-        "s3.secret-access-key": SECRET_KEY,
-        "s3.region": "us-east-1",
-    }
+    name="rest",
+    uri="http://rest:8181",
+    warehouse="s3://rest-bucket"
 )
 
 # --- Streamlit 앱 시작 ---

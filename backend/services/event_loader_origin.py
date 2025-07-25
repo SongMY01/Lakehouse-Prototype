@@ -14,7 +14,7 @@ import redis
 import pyarrow as pa
 
 from config.redis import r
-from config.rest import catalog, NAMESPACE_NAME
+from config.iceberg import catalog, NAMESPACE_NAME
 
 # 🔷 로깅 설정
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
