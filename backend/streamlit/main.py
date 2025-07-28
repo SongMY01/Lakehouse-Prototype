@@ -10,6 +10,7 @@ import pandas as pd
 from pyiceberg.catalog import load_catalog
 from pathlib import Path
 import os
+from config.iceberg import catalog
 
 # 🔷 로거 설정
 logger = logging.getLogger(__name__)
@@ -31,30 +32,6 @@ NAMESPACE = "user_events"
 # 🔷 Iceberg 메타데이터 디렉토리 생성
 logger.info("Ensuring warehouse metadata directory exists at %s", WAREHOUSE_META_PATH)
 os.makedirs(WAREHOUSE_META_PATH, exist_ok=True)
-
-# # 🔷 Iceberg 카탈로그 로드
-# catalog = load_catalog(
-#     CATALOG_NAME,
-#     **{
-#         "type": "sql",
-#         "uri": f"sqlite:///{WAREHOUSE_META_PATH}/pyiceberg_catalog.db",
-#         "warehouse": f"s3://{BUCKET_NAME}",
-#         "s3.endpoint": MINIO_ENDPOINT,
-#         "s3.access-key-id": ACCESS_KEY,
-#         "s3.secret-access-key": SECRET_KEY,
-#         "s3.region": "us-east-1",
-#     }
-# )
-
-catalog = load_catalog(
-    name=CATALOG_NAME,
-    uri="http://iceberg-rest:8181",
-    type="rest",
-    s3__access_key_id="admin",
-    s3__secret_access_key="password",
-    # s3__path_style_access="true"
-)
-
 
 # --- Streamlit 앱 시작 ---
 st.set_page_config(page_title="User Events Dashboard", layout="wide")

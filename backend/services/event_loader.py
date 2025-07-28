@@ -13,11 +13,10 @@ import glob
 import importlib
 import redis
 import pyarrow as pa
-from typing import Optional, List, Tuple
-from pydantic import BaseModel
+from schemas.click_event import click_arrow_fields
+from schemas.keydown_event import keydown_arrow_fields
 
-from pyiceberg.catalog import load_catalog
-from config.rest import catalog, NAMESPACE_NAME, CATALOG_NAME
+from config.iceberg import catalog, NAMESPACE_NAME
 
 
 # 로깅 설정
@@ -27,6 +26,12 @@ logging.basicConfig(level=logging.INFO)
 
 # MinIO 연결 확인
 def check_minio_connection():
+    """
+    MinIO 연결 상태를 확인하고 버킷 목록을 로그로 출력합니다.
+
+    Returns:
+        None
+    """
     try:
         s3 = boto3.client(
             's3',
@@ -52,69 +57,6 @@ except Exception as e:
 # 공통 상수
 GROUP_NAME = "worker-group"
 BATCH_SIZE = 100
-
-# ---------------------------- SCHEMAS ----------------------------
-
-class ClickEvent(BaseModel):
-    altKey: Optional[bool] = False
-    ctrlKey: Optional[bool] = False
-    metaKey: Optional[bool] = False
-    shiftKey: Optional[bool] = False
-    timestamp: int
-    type: str
-    event_type: str = "click"
-    button: Optional[int]
-    buttons: Optional[int]
-    clientX: Optional[int]
-    clientY: Optional[int]
-    pageX: Optional[int]
-    pageY: Optional[int]
-    screenX: Optional[int]
-    screenY: Optional[int]
-    relatedTarget: Optional[str]
-
-def click_arrow_fields() -> List[Tuple[str, pa.DataType]]:
-    return [
-        ("altKey", pa.bool_()),
-        ("ctrlKey", pa.bool_()),
-        ("metaKey", pa.bool_()),
-        ("shiftKey", pa.bool_()),
-        ("button", pa.int32()),
-        ("buttons", pa.int32()),
-        ("clientX", pa.int32()),
-        ("clientY", pa.int32()),
-        ("pageX", pa.int32()),
-        ("pageY", pa.int32()),
-        ("screenX", pa.int32()),
-        ("screenY", pa.int32()),
-        ("relatedTarget", pa.string()),
-        ("timestamp", pa.timestamp("ms")),
-        ("type", pa.string()),
-    ]
-
-class KeydownEvent(BaseModel):
-    altKey: Optional[bool] = False
-    ctrlKey: Optional[bool] = False
-    metaKey: Optional[bool] = False
-    shiftKey: Optional[bool] = False
-    timestamp: int
-    type: str
-    event_type: str = "keydown"
-    key: str
-    code: str
-
-def keydown_arrow_fields() -> List[Tuple[str, pa.DataType]]:
-    return [
-        ("altKey", pa.bool_()),
-        ("ctrlKey", pa.bool_()),
-        ("metaKey", pa.bool_()),
-        ("shiftKey", pa.bool_()),
-        ("key", pa.string()),
-        ("code", pa.string()),
-        ("timestamp", pa.timestamp("ms")),
-        ("type", pa.string()),
-    ]
-
 # ---------------------------- SCHEMA AUTO-LOADER ----------------------------
 
 SCHEMAS = {}
@@ -129,6 +71,16 @@ for event_type, func in schema_funcs.items():
 # ---------------------------- RECORD & STREAM 처리 ----------------------------
 
 def convert_to_record(fields, schema_fields):
+    """
+    Redis에서 읽은 필드를 PyArrow 스키마에 맞는 레코드(dict)로 변환합니다.
+
+    Args:
+        fields (dict): Redis에서 수신한 이벤트 필드
+        schema_fields (list): PyArrow 스키마 필드 정의
+
+    Returns:
+        dict: 변환된 레코드
+    """
     record = {}
     for k, typ in schema_fields:
         v = fields.get(k)
@@ -144,6 +96,16 @@ def convert_to_record(fields, schema_fields):
     return record
 
 def create_record_batch(batch, schema_fields):
+    """
+    레코드 리스트를 PyArrow RecordBatch로 변환합니다.
+
+    Args:
+        batch (list): dict 형태의 레코드 리스트
+        schema_fields (list): PyArrow 스키마 필드 정의
+
+    Returns:
+        pa.RecordBatch: 생성된 RecordBatch
+    """
     columns, names = [], []
     for name, typ in schema_fields:
         col = []
@@ -163,6 +125,15 @@ def create_record_batch(batch, schema_fields):
     ]))
 
 def ensure_consumer_group(stream_name):
+    """
+    지정된 Redis Stream에 대해 Consumer Group이 존재하지 않으면 생성합니다.
+
+    Args:
+        stream_name (str): Redis Stream 이름
+
+    Returns:
+        None
+    """
     try:
         r.xgroup_create(stream_name, GROUP_NAME, id='0', mkstream=True)
         logger.info(f"✅ 어플 구도 생성: {stream_name}:{GROUP_NAME}")
@@ -172,31 +143,66 @@ def ensure_consumer_group(stream_name):
         else:
             logger.error(f"🚨 어플 구도 생성 실패: {stream_name}: {e}")
 
+
+def delete_from_stream(stream_name, ids):
+    """
+    Iceberg 적재 후 Redis Stream에서 처리된 메시지를 삭제합니다.
+
+    Args:
+        stream_name (str): Redis Stream 이름
+        ids (list): 삭제할 메시지 ID 리스트
+
+    Returns:
+        None
+    """
+    time.sleep(5)  # 적재 안정성을 위해 대기
+    for msg_id in ids:
+        r.xdel(stream_name, msg_id)
+    logger.info(f"🗑️ [{stream_name}] Stream에서 {len(ids)}건 삭제")
+
+
 def process_stream(stream_name):
+    """
+    지정된 Redis Stream을 지속적으로 소비하여 배치 단위로 Iceberg에 적재합니다.
+
+    Args:
+        stream_name (str): Redis Stream 이름
+
+    Returns:
+        None
+    """
     logger.info(f"🚀 스트림 소비 시작: {stream_name}")
     ensure_consumer_group(stream_name)
-    event_type = stream_name.replace("_events", "")      
-    table = catalog.load_table(f"{NAMESPACE_NAME}.{event_type}_events")
+
+    batch, ids = [], []
+    last_flush = time.time()
+    event_type = stream_name.replace("_events", "")
     schema_fields = SCHEMAS[event_type]
+    table = catalog.load_table(f"{NAMESPACE_NAME}.{event_type}_events")
 
     while True:
         try:
             resp = r.xreadgroup(GROUP_NAME, "consumer-1", {stream_name: ">"}, count=BATCH_SIZE, block=5000)
-            if not resp:
-                continue
+            now = time.time()
 
-            batch, ids = [], []
-            for _, messages in resp:
-                for msg_id, fields in messages:
-                    record = convert_to_record(fields, schema_fields)
-                    batch.append(record)
-                    ids.append(msg_id)
+            if resp:
+                for _, messages in resp:
+                    for msg_id, fields in messages:
+                        record = convert_to_record(fields, schema_fields)
+                        batch.append(record)
+                        ids.append(msg_id)
 
-            if batch:
-                rb = create_record_batch(batch, schema_fields)
-                table.append(pa.Table.from_batches([rb]))
-                logger.info(f"📋 [{stream_name}] 배치 적재 완료: {len(batch)}개")
-                r.xack(stream_name, GROUP_NAME, *ids)
+            if len(batch) >= BATCH_SIZE or (batch and now - last_flush >= 5):
+                if batch:
+                    rb = create_record_batch(batch, schema_fields)
+                    table.append(pa.Table.from_batches([rb]))
+                    logger.info(f"📋 [{stream_name}] 배치 적재 완료: {len(batch)}개")
+
+                    # 메시지 삭제를 별도 스레드로 처리
+                    threading.Thread(target=delete_from_stream, args=(stream_name, ids.copy())).start()
+                    batch.clear()
+                    ids.clear()
+                    last_flush = now
 
         except Exception as e:
             logger.error(f"🚨 스트림 처리 실패: {stream_name}: {e}")

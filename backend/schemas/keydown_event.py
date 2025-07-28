@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 # file: schemas/keydown_event.py
-# desc: 키다운 이벤트 스키마 정의 및 PyArrow 필드 매핑 함수
+# desc: 키다운 이벤트 스키마 정의 및 Iceberg 필드 매핑 함수
 # author: minyoung.song
 # created: 2025-07-23
 
 from pydantic import BaseModel
 from typing import Optional, List, Tuple
 import pyarrow as pa
+from pyiceberg.schema import Schema, NestedField
+from pyiceberg.types import BooleanType, StringType, TimestampType
 
 class KeydownEvent(BaseModel):
     """
@@ -26,6 +28,26 @@ class KeydownEvent(BaseModel):
     event_type: str = "keydown"
     key: str
     code: str
+
+
+
+def define_keyboard_schema() -> Schema:
+    """
+    KeydownEvent 스키마를 Iceberg의 Schema 객체로 반환
+
+    Returns:
+        Schema: Iceberg 테이블 생성을 위한 스키마 객체
+    """
+    return Schema(
+        NestedField(1, "altKey", BooleanType(), required=True),
+        NestedField(2, "ctrlKey", BooleanType(), required=True),
+        NestedField(3, "metaKey", BooleanType(), required=True),
+        NestedField(4, "shiftKey", BooleanType(), required=True),
+        NestedField(5, "key", StringType(), required=True),
+        NestedField(6, "code", StringType(), required=True),
+        NestedField(7, "timestamp", TimestampType(), required=True),
+        NestedField(8, "type", StringType(), required=True),
+    )
 
 def keydown_arrow_fields() -> List[Tuple[str, pa.DataType]]:
     """
