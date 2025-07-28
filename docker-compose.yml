@@ -151,8 +151,6 @@ services:
       - "8501:8501"
     networks:
       iceberg_net:
-    depends_on:
-      - create_table
     environment:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
