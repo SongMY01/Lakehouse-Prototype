@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import boto3
+# import boto3
 import json
 import io
 import pyarrow.parquet as pq
-from fastavro import reader
+# from fastavro import reader
 from pyiceberg.catalog import load_catalog
 
 # 📌 Iceberg 카탈로그 설정
