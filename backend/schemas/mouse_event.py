@@ -1,7 +1,6 @@
-
 from pydantic import BaseModel
 from pyiceberg.schema import Schema, NestedField
-from pyiceberg.types import BooleanType,IntegerType, StringType, TimestampType
+from pyiceberg.types import BooleanType, IntegerType, StringType, TimestampType, DoubleType
 from typing import Optional, List, Tuple
 import pyarrow as pa
 
@@ -19,11 +18,8 @@ class ClickEvent(BaseModel):
     # 이벤트 발생 시각 (ms)
     timestamp: int
 
-    # DOM 이벤트 타입 (예: 'click')
+    # DOM 이벤트 타입 (예: "click", "mousedown" 등)
     type: str
-
-    # 고정 이벤트 타입
-    event_type: str = "click"
 
     # 마우스 관련 좌표 및 버튼 상태
     button: Optional[int]
@@ -38,8 +34,18 @@ class ClickEvent(BaseModel):
     # 관련 대상 (예: 다른 요소의 outerHTML)
     relatedTarget: Optional[str]
 
+    # 추가 필드
+    id: Optional[str]
+    canvasId: Optional[str]
+    canvasX: Optional[float]
+    canvasY: Optional[float]
+    movementX: Optional[float]
+    movementY: Optional[float]
+    isTrusted: Optional[bool]
+    shape: Optional[str]
 
-def define_click_schema() -> Schema:
+
+def define_mouse_schema() -> Schema:
     """
     ClickEvent 스키마를 Iceberg의 Schema 객체로 반환
 
@@ -61,10 +67,18 @@ def define_click_schema() -> Schema:
         NestedField(12, "screenY", IntegerType(), required=True),
         NestedField(13, "relatedTarget", StringType(), required=True),
         NestedField(14, "timestamp", TimestampType(), required=True),
-        NestedField(15, "type", StringType(), required=True),
+        NestedField(15, "event_type", StringType(), required=True),
+        NestedField(16, "id", StringType(), required=False),
+        NestedField(17, "canvasId", StringType(), required=False),
+        NestedField(18, "canvasX", DoubleType(), required=False),
+        NestedField(19, "canvasY", DoubleType(), required=False),
+        NestedField(20, "movementX", DoubleType(), required=False),
+        NestedField(21, "movementY", DoubleType(), required=False),
+        NestedField(22, "isTrusted", BooleanType(), required=False),
+        NestedField(23, "shape", StringType(), required=False),
     )
 
-def click_arrow_fields() -> List[Tuple[str, pa.DataType]]:
+def mouse_arrow_fields() -> List[Tuple[str, pa.DataType]]:
     """
     ClickEvent 스키마를 PyArrow 필드 정의 리스트로 반환
 
@@ -86,5 +100,13 @@ def click_arrow_fields() -> List[Tuple[str, pa.DataType]]:
         ("screenY", pa.int32()),
         ("relatedTarget", pa.string()),
         ("timestamp", pa.timestamp("ms")),
-        ("type", pa.string()),
+        ("event_type", pa.string()),
+        ("id", pa.string()),
+        ("canvasId", pa.string()),
+        ("canvasX", pa.float64()),
+        ("canvasY", pa.float64()),
+        ("movementX", pa.float64()),
+        ("movementY", pa.float64()),
+        ("isTrusted", pa.bool_()),
+        ("shape", pa.string()),
     ]

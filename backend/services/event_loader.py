@@ -9,12 +9,12 @@ import boto3
 import time
 import logging
 import threading
-import glob
-import importlib
 import redis
 import pyarrow as pa
-from schemas.click_event import click_arrow_fields
+from schemas.mouse_event import mouse_arrow_fields
 from schemas.keydown_event import keydown_arrow_fields
+ 
+from scripts.create_iceberg_tables import EVENT_SCHEMAS
 
 from config.iceberg import catalog, NAMESPACE_NAME
 
@@ -61,7 +61,7 @@ BATCH_SIZE = 100
 
 SCHEMAS = {}
 schema_funcs = {
-    "click": click_arrow_fields,
+    "mouse": mouse_arrow_fields,
     "keydown": keydown_arrow_fields
 }
 
@@ -91,6 +91,11 @@ def convert_to_record(fields, schema_fields):
                 record[k] = int(v) if v not in [None, ""] else 0
             except Exception:
                 record[k] = 0
+        elif typ == pa.float64():
+            try:
+                record[k] = float(v) if v not in [None, ""] else 0.0
+            except Exception:
+                record[k] = 0.0
         else:
             record[k] = v if v is not None else ""
     return record
@@ -211,7 +216,7 @@ def process_stream(stream_name):
 # ---------------------------- MAIN ----------------------------
 
 if __name__ == "__main__":
-    streams = [f"{k}_events" for k in SCHEMAS.keys()]
+    streams = [f"{event}_events" for event, _ in EVENT_SCHEMAS]
     threads = []
     for stream in streams:
         t = threading.Thread(target=process_stream, args=(stream,))

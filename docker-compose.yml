@@ -4,8 +4,6 @@ services:
     container_name: sv_redis
     ports:
       - "6379:6379"
-    volumes:
-      - ./backend/db/redis/data:/data
     networks:
       - iceberg_net
   
@@ -110,7 +108,6 @@ services:
     depends_on:
       - redis
       - minio
-      - create_table
     environment:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password

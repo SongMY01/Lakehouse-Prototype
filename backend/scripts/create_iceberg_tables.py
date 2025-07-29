@@ -6,8 +6,14 @@
 
 from pyiceberg.schema import Schema
 from config.iceberg import catalog
-from schemas.click_event import define_click_schema
+from schemas.mouse_event import define_mouse_schema
 from schemas.keydown_event import define_keyboard_schema
+
+# Map event types to their schema functions
+EVENT_SCHEMAS = [
+    ("mouse", define_mouse_schema),
+    ("keydown", define_keyboard_schema),
+]
 
 
 def create_table(catalog, table_name: str, schema: Schema):
@@ -24,8 +30,9 @@ def create_table(catalog, table_name: str, schema: Schema):
 def main():
     print("📚 Loading Iceberg catalog...")
 
-    create_table(catalog, "user_events.click_events", define_click_schema())
-    create_table(catalog, "user_events.keydown_events", define_keyboard_schema())
+    for event, schema_fn in EVENT_SCHEMAS:
+        table_name = f"user_events.{event}_events"
+        create_table(catalog, table_name, schema_fn())
 
     print("✅ Iceberg 테이블 생성 완료!")
 

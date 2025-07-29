@@ -39,7 +39,7 @@ st.set_page_config(page_title="User Events Dashboard", layout="wide")
 st.title("🎯 User Events Dashboard")
 
 # 🔷 테이블 선택 (클릭/키다운)
-table_choice = st.selectbox("📋 테이블 선택", options=["click_events", "keydown_events"])
+table_choice = st.selectbox("📋 테이블 선택", options=["mouse_events", "keydown_events"])
 TABLE_NAME = f"{NAMESPACE}.{table_choice}"
 
 # 🔷 최신 데이터 갱신 버튼

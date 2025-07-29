@@ -23,16 +23,19 @@ async def write_to_stream(data: dict):
     Returns:
         dict: 기록 결과 상태 및 메타 정보
     """
-    # event_type이 없으면 "unknown"으로 처리
-    event_type = data.get("event_type", "unknown")
+    # type이 없으면 "unknown"으로 처리
+    type = data.get("stream", "unknown")
+
+    print("💡 data keys:", list(data.keys()))
+    print("💡 type value:", type)
 
     # Redis가 허용하는 타입으로 변환 (모든 값을 문자열로)
     data_str = {k: str(v) for k, v in data.items()}
 
-    # Stream 이름 결정 (event_type 기반)
-    stream_name = f"{event_type}_events"
+    # Stream 이름 결정 (type 기반)
+    stream_name = f"{type}_events"
 
-    logger.debug(f"이벤트 수신: {event_type}, Stream: {stream_name}, Data: {data_str}")
+    logger.debug(f"이벤트 수신: {type}, Stream: {stream_name}, Data: {data_str}")
 
     # Redis Stream에 이벤트 추가 (MAX_STREAM_LENGTH를 초과하면 자동으로 삭제)
     r.xadd(
@@ -46,7 +49,7 @@ async def write_to_stream(data: dict):
 
     return {
         "status": "queued",
-        "event_type": event_type,
+        "type": type,
         "stream": stream_name,
         "received": data
     }
