@@ -26,8 +26,8 @@ async def write_to_stream(data: dict):
     # type이 없으면 "unknown"으로 처리
     type = data.get("stream", "unknown")
 
-    print("💡 data keys:", list(data.keys()))
-    print("💡 type value:", type)
+    # print("💡 data keys:", list(data.keys()))
+    # print("💡 type value:", type)
 
     # Redis가 허용하는 타입으로 변환 (모든 값을 문자열로)
     data_str = {k: str(v) for k, v in data.items()}
