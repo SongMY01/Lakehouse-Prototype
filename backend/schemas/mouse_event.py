@@ -31,11 +31,7 @@ class ClickEvent(BaseModel):
     screenX: Optional[int]
     screenY: Optional[int]
 
-    # 관련 대상 (예: 다른 요소의 outerHTML)
-    relatedTarget: Optional[str]
-
     # 추가 필드
-    id: Optional[str]
     canvasId: Optional[str]
     canvasX: Optional[float]
     canvasY: Optional[float]
@@ -65,17 +61,15 @@ def define_mouse_schema() -> Schema:
         NestedField(10, "pageY", IntegerType(), required=True),
         NestedField(11, "screenX", IntegerType(), required=True),
         NestedField(12, "screenY", IntegerType(), required=True),
-        NestedField(13, "relatedTarget", StringType(), required=True),
-        NestedField(14, "timestamp", TimestampType(), required=True),
-        NestedField(15, "event_type", StringType(), required=True),
-        NestedField(16, "id", StringType(), required=False),
-        NestedField(17, "canvasId", StringType(), required=False),
-        NestedField(18, "canvasX", DoubleType(), required=False),
-        NestedField(19, "canvasY", DoubleType(), required=False),
-        NestedField(20, "movementX", DoubleType(), required=False),
-        NestedField(21, "movementY", DoubleType(), required=False),
-        NestedField(22, "isTrusted", BooleanType(), required=False),
-        NestedField(23, "shape", StringType(), required=False),
+        NestedField(13, "timestamp", TimestampType(), required=True),
+        NestedField(14, "event_type", StringType(), required=True),
+        NestedField(15, "canvasId", StringType(), required=False),
+        NestedField(16, "canvasX", DoubleType(), required=False),
+        NestedField(17, "canvasY", DoubleType(), required=False),
+        NestedField(18, "movementX", DoubleType(), required=False),
+        NestedField(19, "movementY", DoubleType(), required=False),
+        NestedField(20, "isTrusted", BooleanType(), required=False),
+        NestedField(21, "shape", StringType(), required=False),
     )
 
 def mouse_arrow_fields() -> List[Tuple[str, pa.DataType]]:
@@ -98,10 +92,8 @@ def mouse_arrow_fields() -> List[Tuple[str, pa.DataType]]:
         ("pageY", pa.int32()),
         ("screenX", pa.int32()),
         ("screenY", pa.int32()),
-        ("relatedTarget", pa.string()),
         ("timestamp", pa.timestamp("ms")),
         ("event_type", pa.string()),
-        ("id", pa.string()),
         ("canvasId", pa.string()),
         ("canvasX", pa.float64()),
         ("canvasY", pa.float64()),

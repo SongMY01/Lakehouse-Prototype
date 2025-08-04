@@ -1,4 +1,35 @@
 services:
+  backend:
+    build:
+      context: ./backend
+    container_name: sv_backend
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    networks:
+      iceberg_net:
+
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: sv_kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092" # 내부통신용
+    environment:
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@sv_kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://sv_kafka:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      iceberg_net:
+
   redis:
     image: redis:7.4.3
     container_name: sv_redis
@@ -81,20 +112,6 @@ services:
       /usr/bin/mc admin policy attach minio readwrite --user admin;
       tail -f /dev/null
       "
-      
-  backend:
-    build:
-      context: ./backend
-    container_name: sv_backend
-    volumes:
-      - ./backend:/app
-    ports:
-      - "8000:8000"
-    depends_on:
-      - redis
-      - minio
-    networks:
-      iceberg_net:
 
   event_loader:
     build:
@@ -105,9 +122,6 @@ services:
       - ./backend:/app
     networks:
       iceberg_net:
-    depends_on:
-      - redis
-      - minio
     environment:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
