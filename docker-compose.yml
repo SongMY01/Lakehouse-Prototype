@@ -29,14 +29,6 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     networks:
       iceberg_net:
-
-  redis:
-    image: redis:7.4.3
-    container_name: sv_redis
-    ports:
-      - "6379:6379"
-    networks:
-      - iceberg_net
   
   spark-iceberg:
     image: tabulario/spark-iceberg

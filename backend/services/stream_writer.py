@@ -4,24 +4,14 @@
 # author: minyoung.song
 # created: 2025-08-04
 
-import os
 import logging
-from kafka import KafkaProducer
-import json
+from config.kafka import create_kafka_producer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Kafka 설정
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "sv_kafka:29092")
-
 # Kafka Producer 초기화
-producer = KafkaProducer(
-    bootstrap_servers=[KAFKA_BROKER],
-    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-    key_serializer=lambda k: str(k).encode("utf-8") if k else None,
-    retries=3
-)
+producer = create_kafka_producer()
 
 async def write_to_stream(data: dict):
     """

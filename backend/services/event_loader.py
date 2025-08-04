@@ -4,13 +4,12 @@
 # author: minyoung.song
 # created: 2025-08-04
 
-import os
 import json
 import time
 import logging
 import threading
 import pyarrow as pa
-from kafka import KafkaConsumer
+from config.kafka import create_kafka_consumer
 from config.iceberg import catalog, NAMESPACE_NAME
 from schemas.mouse_event import mouse_arrow_fields
 from schemas.keydown_event import keydown_arrow_fields
@@ -79,13 +78,7 @@ def consume_and_write(topic_name):
         logger.warning(f"🧊 Iceberg 테이블이 아직 존재하지 않음: {event_type}_events → 건너뜀")
         return  # 이 토픽은 처리하지 않음
 
-    consumer = KafkaConsumer(
-        topic_name,
-        bootstrap_servers="sv_kafka:29092",
-        auto_offset_reset="earliest",
-        enable_auto_commit=False,
-        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-    )
+    consumer = create_kafka_consumer(topic_name)
     logger.info(f"📥 Kafka 토픽 '{topic_name}' 소비 시작...")
 
     batch = []
