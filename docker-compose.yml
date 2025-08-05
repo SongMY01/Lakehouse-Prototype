@@ -1,4 +1,41 @@
 services:
+  jobmanager:
+    image: flink:1.18.1-scala_2.12-java17
+    ports:
+      - "8081:8081"
+    networks:
+      - iceberg_net
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        parallelism.default: 2
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    command: jobmanager
+    volumes:
+      - ./backend/flink-jars:/opt/flink/lib 
+    
+  taskmanager:
+    image: flink:1.18.1-scala_2.12-java17
+    networks:
+      - iceberg_net
+    depends_on:
+      - jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 2
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    command: taskmanager
+    volumes:
+      - ./backend/flink-jars:/opt/flink/lib 
+      
   backend:
     build:
       context: ./backend
@@ -15,7 +52,7 @@ services:
     container_name: sv_kafka
     ports:
       - "9092:9092"
-      - "29092:29092" # 내부통신용
+      - "29092:29092"
     environment:
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_NODE_ID: 1
@@ -54,7 +91,7 @@ services:
       - 8080:8080
 
   rest:
-    image: tabulario/iceberg-rest
+    image: tabulario/iceberg-rest:1.5.0
     container_name: iceberg-rest
     networks:
       iceberg_net:
@@ -105,23 +142,23 @@ services:
       tail -f /dev/null
       "
 
-  event_loader:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.event_loader
-    container_name: sv_event_loader
-    volumes:
-      - ./backend:/app
-    networks:
-      iceberg_net:
-    environment:
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
-      - AWS_REGION=us-east-1
-      - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
-      - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
-      - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
-      - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
+  # event_loader:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile.event_loader
+  #   container_name: sv_event_loader
+  #   volumes:
+  #     - ./backend:/app
+  #   networks:
+  #     iceberg_net:
+  #   environment:
+  #     - AWS_ACCESS_KEY_ID=admin
+  #     - AWS_SECRET_ACCESS_KEY=password
+  #     - AWS_REGION=us-east-1
+  #     - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
+  #     - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+  #     - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
+  #     - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
 
 
   create_table:
