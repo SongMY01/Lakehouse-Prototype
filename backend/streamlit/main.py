@@ -21,17 +21,9 @@ ACCESS_KEY = "minioadmin"
 SECRET_KEY = "minioadmin"
 BUCKET_NAME = "warehouse"
 
-# 🔷 메타데이터 경로 설정 (backend/ 기준)
-BASE_DIR = Path(__file__).resolve().parent.parent
-WAREHOUSE_META_PATH = BASE_DIR / "db/warehouse"
-
 # 🔷 Iceberg 카탈로그 설정
 CATALOG_NAME = "default"
 NAMESPACE = "user_events"
-
-# 🔷 Iceberg 메타데이터 디렉토리 생성
-logger.info("Ensuring warehouse metadata directory exists at %s", WAREHOUSE_META_PATH)
-os.makedirs(WAREHOUSE_META_PATH, exist_ok=True)
 
 # --- Streamlit 앱 시작 ---
 st.set_page_config(page_title="User Events Dashboard", layout="wide")
