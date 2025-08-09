@@ -1,10 +1,11 @@
 services:
   jobmanager:
-    image: flink:1.18.1-scala_2.12-java17
-    ports:
-      - "8081:8081"
-    networks:
-      - iceberg_net
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.flink
+    image: myflink:1.18.1-extra
+    command: jobmanager
+    container_name: sv_jobmanager
     environment:
       - |
         FLINK_PROPERTIES=
@@ -13,16 +14,19 @@ services:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
       - AWS_REGION=us-east-1
-    command: jobmanager
-    volumes:
-      - ./backend/flink-jars:/opt/flink/lib 
-    
-  taskmanager:
-    image: flink:1.18.1-scala_2.12-java17
+    ports:
+      - "8081:8081"
     networks:
       - iceberg_net
-    depends_on:
-      - jobmanager
+
+  taskmanager:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.flink
+    image: myflink:1.18.1-extra
+    command: taskmanager
+    container_name: sv_taskmanager
+    depends_on: [jobmanager]
     environment:
       - |
         FLINK_PROPERTIES=
@@ -32,10 +36,8 @@ services:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
       - AWS_REGION=us-east-1
-    command: taskmanager
-    volumes:
-      - ./backend/flink-jars:/opt/flink/lib 
-      
+    networks: [iceberg_net]
+
   backend:
     build:
       context: ./backend

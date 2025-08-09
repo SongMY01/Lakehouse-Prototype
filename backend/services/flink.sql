@@ -46,6 +46,7 @@ CREATE TABLE keydown_events_src (
   'format' = 'json',
   'scan.startup.mode' = 'earliest-offset'
 );
+./bin/sql-client.sh
 
 CREATE CATALOG iceberg WITH (
   'type' = 'iceberg',

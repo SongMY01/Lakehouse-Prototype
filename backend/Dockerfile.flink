@@ -1,0 +1,31 @@
+# ---------- deps stage ----------
+    FROM maven:3.9.6-eclipse-temurin-17 AS deps
+    WORKDIR /build
+    COPY pom.xml .
+    # 의존성 다운로드 및 copy-dependencies 실행(화이트리스트 결과 생성)
+    RUN mvn -q -DskipTests package
+    
+    # ---------- runtime (Flink) ----------
+    FROM flink:1.18.1-scala_2.12-java17
+    
+    # 1) 내가 추가할 JAR들만 /opt/flink/lib 로 복사
+    COPY --from=deps /build/target/extra-libs/ /opt/flink/lib/
+    
+    # 2) S3 플러그인은 plugins 규칙에 맞게
+    RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop
+    COPY --from=deps /build/target/s3-plugin/flink-s3-fs-hadoop-1.18.1.jar /opt/flink/plugins/s3-fs-hadoop/
+    
+    # 3) 안전장치: 충돌 유발 가능 JAR 제거
+    # - 구 commons-cli 제거(1.5.x만 남기기)
+    # - jline/ slf4j-simple 제거(클래스패스 충돌 방지)
+    RUN find /opt/flink/lib -name 'commons-cli-*.jar' ! -name 'commons-cli-1.5*' -delete || true \
+     && find /opt/flink/lib -name 'jline-*.jar' -delete || true \
+     && find /opt/flink/lib -name 'slf4j-simple-*.jar' -delete || true
+    
+    # 4) 환경은 docker-compose에서 주입 (AWS_ACCESS_KEY_ID/SECRET/REGION 등)
+    #    별도 CMD는 compose의 command 사용
+    
+        # SQL 자동 실행 준비
+    COPY ./sql /opt/sql-scripts/
+    COPY ./scripts/run-sql.sh /opt/run-sql.sh
+    RUN chmod +x /opt/run-sql.sh
