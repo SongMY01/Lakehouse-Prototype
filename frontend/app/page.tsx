@@ -3,7 +3,16 @@ const log = (...args: any[]) => {
   console.log(...args);
 };
 import { useEffect, useRef } from "react";
+
 import Image from "next/image";
+
+const measureBytes = (obj: unknown): number => {
+  try {
+    return new TextEncoder().encode(JSON.stringify(obj)).length;
+  } catch {
+    return -1;
+  }
+};
 
 type Shape =
   | { type: 'rect', x: number, y: number, w: number, h: number }
@@ -29,6 +38,8 @@ export default function Home() {
   ];
 
   const sendPayload = async (payload: any) => {
+    const sizeBytes = measureBytes(payload);
+    log('DEBUG', '[size]', sizeBytes, 'bytes');
     try {
       await fetch("http://localhost:8000/api/events", {
         method: "POST",
