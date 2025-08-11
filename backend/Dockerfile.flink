@@ -25,7 +25,7 @@
     # 4) 환경은 docker-compose에서 주입 (AWS_ACCESS_KEY_ID/SECRET/REGION 등)
     #    별도 CMD는 compose의 command 사용
     
-        # SQL 자동 실행 준비
-    COPY ./sql /opt/sql-scripts/
-    COPY ./scripts/run-sql.sh /opt/run-sql.sh
-    RUN chmod +x /opt/run-sql.sh
+    #     # SQL 자동 실행 준비
+    # COPY ./sql /opt/sql-scripts/
+    # COPY ./scripts/run-sql.sh /opt/run-sql.sh
+    # RUN chmod +x /opt/run-sql.sh

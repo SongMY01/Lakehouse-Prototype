@@ -46,6 +46,10 @@ services:
       - ./backend:/app
     ports:
       - "8000:8000"
+    depends_on:
+      - kafka
+      - rest
+      - minio
     networks:
       iceberg_net:
 
@@ -106,6 +110,8 @@ services:
       - CATALOG_WAREHOUSE=s3://warehouse/
       - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
       - CATALOG_S3_ENDPOINT=http://minio:9000
+    depends_on:
+      - minio
 
   minio:
       image: minio/minio
@@ -180,12 +186,17 @@ services:
       - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
       - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
       - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
+    depends_on:
+      - rest
+      - minio
+      - mc
+
 
   streamlit:
     build:
       context: ./backend
       dockerfile: Dockerfile.streamlit 
-    command: streamlit run streamlit/main.py
+    command: streamlit run st_app/main.py
     container_name: sv_streamlit
     volumes:
       - ./backend:/app
@@ -201,7 +212,6 @@ services:
       - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
       - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
       - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
-
 
   frontend:
     build: ./frontend
