@@ -1,131 +1,11 @@
 services:
-  jobmanager:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.flink
-    image: myflink:1.18.1-extra
-    command: jobmanager
-    container_name: sv_jobmanager
-    environment:
-      - |
-        FLINK_PROPERTIES=
-        jobmanager.rpc.address: jobmanager
-        parallelism.default: 2
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
-      - AWS_REGION=us-east-1
+  frontend:
+    build: ./frontend
+    container_name: sv_frontend
     ports:
-      - "8081:8081"
-    networks:
-      - iceberg_net
-
-  taskmanager:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.flink
-    image: myflink:1.18.1-extra
-    command: taskmanager
-    container_name: sv_taskmanager
-    depends_on: [jobmanager]
-    environment:
-      - |
-        FLINK_PROPERTIES=
-        jobmanager.rpc.address: jobmanager
-        taskmanager.numberOfTaskSlots: 4
-        parallelism.default: 2
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
-      - AWS_REGION=us-east-1
-    networks: [iceberg_net]
-
-  backend:
-    build:
-      context: ./backend
-    container_name: sv_backend
-    volumes:
-      - ./backend:/app
-    ports:
-      - "8000:8000"
-    depends_on:
-      - kafka
-      - rest
-      - minio
+      - "3000:3000"
     networks:
       iceberg_net:
-
-  kafka:
-    image: apache/kafka:3.9.1
-    container_name: sv_kafka
-    ports:
-      - "9092:9092"
-      - "29092:29092"
-    environment:
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_NODE_ID: 1
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@sv_kafka:9093
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://sv_kafka:29092
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
-      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    networks:
-      iceberg_net:
-  
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    ports:
-      - "8080:8080"
-    environment:
-      - KAFKA_CLUSTERS_0_NAME=local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=sv_kafka:29092
-    depends_on:
-      - kafka
-    networks:
-      iceberg_net:
-
-
-  spark-iceberg:
-    image: tabulario/spark-iceberg
-    container_name: spark-iceberg
-    networks:
-      iceberg_net:
-    depends_on:
-      - rest
-      - minio
-    volumes:
-      - ./warehouse:/home/iceberg/warehouse
-      - ./notebooks:/home/iceberg/notebooks/notebooks
-    environment:
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
-      - AWS_REGION=us-east-1
-      - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
-      - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
-      - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
-      - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
-    ports:
-      - 8888:8888
-
-  rest:
-    image: tabulario/iceberg-rest:1.5.0
-    container_name: iceberg-rest
-    networks:
-      iceberg_net:
-    ports:
-      - 8181:8181
-    environment:
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
-      - AWS_REGION=us-east-1
-      - CATALOG_WAREHOUSE=s3://warehouse/
-      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
-      - CATALOG_S3_ENDPOINT=http://minio:9000
-    depends_on:
-      - minio
-
   minio:
       image: minio/minio
       container_name: minio
@@ -163,26 +43,26 @@ services:
       tail -f /dev/null
       "
 
-  # event_loader:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile.event_loader
-  #   container_name: sv_event_loader
-  #   volumes:
-  #     - ./backend:/app
-  #   networks:
-  #     iceberg_net:
-  #   environment:
-  #     - AWS_ACCESS_KEY_ID=admin
-  #     - AWS_SECRET_ACCESS_KEY=password
-  #     - AWS_REGION=us-east-1
-  #     - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
-  #     - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
-  #     - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
-  #     - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
+  rest:
 
+    image: tabulario/iceberg-rest:1.5.0
+    container_name: iceberg-rest
+    networks:
+      iceberg_net:
+    ports:
+      - 8181:8181
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - CATALOG_WAREHOUSE=s3://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+    depends_on:
+      - minio
 
   create_table:
+
     build:
       context: ./backend
       dockerfile: Dockerfile.create_table
@@ -204,6 +84,96 @@ services:
       - minio
       - mc
 
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: sv_kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@sv_kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://sv_kafka:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      iceberg_net:
+  
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=sv_kafka:29092
+    depends_on:
+      - kafka
+    networks:
+      iceberg_net:
+
+  backend:
+    build:
+      context: ./backend
+    container_name: sv_backend
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - kafka
+      - rest
+      - minio
+    networks:
+      iceberg_net:
+
+  jobmanager:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.flink
+    image: myflink:1.18.1-extra
+    command: jobmanager
+    container_name: sv_jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        parallelism.default: 2
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    ports:
+      - "8081:8081"
+    networks:
+      - iceberg_net
+
+  taskmanager:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.flink
+    image: myflink:1.18.1-extra
+    command: taskmanager
+    depends_on: [jobmanager]
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        taskmanager.numberOfTaskSlots: 32
+        parallelism.default: 128
+        execution.checkpointing.interval: 30s
+        execution.checkpointing.timeout: 5m
+        execution.checkpointing.unaligned: true
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///tmp/flink-chk   # 로컬 개발용 (운영은 S3/MinIO)
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+    networks: [iceberg_net]
 
   streamlit:
     build:
@@ -226,13 +196,55 @@ services:
       - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
       - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
 
-  frontend:
-    build: ./frontend
-    container_name: sv_frontend
-    ports:
-      - "3000:3000"
+  spark-iceberg:
+    image: tabulario/spark-iceberg:3.5.5_1.8.1
+    container_name: spark-iceberg
     networks:
       iceberg_net:
+    depends_on:
+      - rest
+      - minio
+    volumes:
+      - ./warehouse:/home/iceberg/warehouse
+      - ./notebooks:/home/iceberg/notebooks/notebooks
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
+      - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
+      - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
+    ports:
+      - 8888:8888
+
+
+
+  # event_loader:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile.event_loader
+  #   container_name: sv_event_loader
+  #   volumes:
+  #     - ./backend:/app
+  #   networks:
+  #     iceberg_net:
+  #   environment:
+  #     - AWS_ACCESS_KEY_ID=admin
+  #     - AWS_SECRET_ACCESS_KEY=password
+  #     - AWS_REGION=us-east-1
+  #     - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
+  #     - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+  #     - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
+  #     - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
+
+
+
+
+
+
+
+
 
 networks:
   iceberg_net:
