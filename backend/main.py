@@ -65,4 +65,5 @@ if __name__ == "__main__":
         port=8000,
         reload=True,
         log_level=log_level.lower(),  # uvicorn은 소문자
+        access_log=False
     )
