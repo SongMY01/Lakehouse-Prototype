@@ -1,3 +1,5 @@
+./bin/sql-client.sh
+
 CREATE TABLE mouse_events_src (
   altKey BOOLEAN,
   ctrlKey BOOLEAN,
@@ -24,7 +26,7 @@ CREATE TABLE mouse_events_src (
   'connector' = 'kafka',
   'topic' = 'mouse_events',
   'properties.bootstrap.servers' = 'sv_kafka:29092',
-  'properties.group.id' = 'flink-consumer',
+  'properties.group.id' = 'flink-consumer3',
   'format' = 'json',
   'scan.startup.mode' = 'earliest-offset'
 );
@@ -46,7 +48,6 @@ CREATE TABLE keydown_events_src (
   'format' = 'json',
   'scan.startup.mode' = 'earliest-offset'
 );
-./bin/sql-client.sh
 
 CREATE CATALOG iceberg WITH (
   'type' = 'iceberg',

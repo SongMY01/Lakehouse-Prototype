@@ -99,7 +99,6 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      # 추가
       KAFKA_COMPRESSION_TYPE: zstd
       KAFKA_LOG_RETENTION_MS: 86400000
       KAFKA_NUM_PARTITIONS: 8
@@ -147,14 +146,24 @@ services:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: jobmanager
-        parallelism.default: 2
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
+        parallelism.default: 8
+        # 체크포인트/복구 기본값
+        execution.checkpointing.interval: 30 s
+        execution.checkpointing.timeout: 5 min
+        execution.checkpointing.min-pause: 5 s
+        execution.checkpointing.unaligned: true
+        execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+        table.exec.source.idle.timeout: 5 s
+        # MinIO(체크포인트) 설정
+        state.checkpoints.dir: s3://flink/checkpoints/
+        s3.endpoint: http://minio:9000
+        s3.access-key: admin
+        s3.secret-key: password
+        s3.path.style.access: true
+        s3.ssl.enabled: false
       - AWS_REGION=us-east-1
-    ports:
-      - "8081:8081"
-    networks:
-      - iceberg_net
+    ports: ["8081:8081"]
+    networks: [iceberg_net]
 
   taskmanager:
     build:
@@ -167,12 +176,25 @@ services:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: jobmanager
-        taskmanager.numberOfTaskSlots: 4
-        parallelism.default: 2
-      - AWS_ACCESS_KEY_ID=admin
-      - AWS_SECRET_ACCESS_KEY=password
+        taskmanager.numberOfTaskSlots: 8   # 머신 코어에 맞춰 조정
+        parallelism.default: 8
+        # 체크포인트/복구(동일하게)
+        execution.checkpointing.interval: 30 s
+        execution.checkpointing.timeout: 5 min
+        execution.checkpointing.min-pause: 5 s
+        execution.checkpointing.unaligned: true
+        execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+        table.exec.source.idle.timeout: 5 s
+        # MinIO(체크포인트)
+        state.checkpoints.dir: s3://flink/checkpoints/
+        s3.endpoint: http://minio:9000
+        s3.access-key: admin
+        s3.secret-key: password
+        s3.path.style.access: true
+        s3.ssl.enabled: false
       - AWS_REGION=us-east-1
     networks: [iceberg_net]
+
 
   streamlit:
     build:
