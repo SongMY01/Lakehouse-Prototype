@@ -5,13 +5,13 @@
 # created: 2025-08-04
 
 import logging
-from config.kafka import create_kafka_producer
+from config.kafka import get_kafka_producer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # Kafka Producer 초기화
-producer = create_kafka_producer()
+producer = get_kafka_producer()
 
 async def write_to_stream(data: dict):
     """
@@ -27,10 +27,9 @@ async def write_to_stream(data: dict):
     topic_name = f"{event_type}_events"
 
     # Kafka 전송
-    producer.send(topic_name, key=event_type, value=data)
-    producer.flush()
+    producer.send(topic_name, key=None, value=data)
 
-    logger.info(f"이벤트가 Kafka 토픽 '{topic_name}'에 기록됨")
+    logger.debug(f"이벤트가 Kafka 토픽 '{topic_name}'에 기록됨")
 
     return {
         "status": "queued",

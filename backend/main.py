@@ -28,6 +28,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info(f"LOG_LEVEL 설정: {log_level}")
 
+# 🔷 Kafka 클라이언트 로깅 레벨 조정 (연결 로그 줄이기)
+logging.getLogger("kafka").setLevel(logging.WARNING)
+logging.getLogger("kafka.conn").setLevel(logging.WARNING)
+logging.getLogger("kafka.producer").setLevel(logging.WARNING)
+logging.getLogger("kafka.consumer").setLevel(logging.WARNING)
+
 # 🔷 FastAPI 앱 생성
 app = FastAPI(
     title="My Project API",

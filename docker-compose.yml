@@ -99,6 +99,12 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # 추가
+      KAFKA_COMPRESSION_TYPE: zstd
+      KAFKA_LOG_RETENTION_MS: 86400000
+      KAFKA_NUM_PARTITIONS: 8
+      KAFKA_MESSAGE_MAX_BYTES: 1048576
+
     networks:
       iceberg_net:
   
@@ -115,10 +121,10 @@ services:
     networks:
       iceberg_net:
 
-  backend:
+  stream_writer:
     build:
       context: ./backend
-    container_name: sv_backend
+    container_name: sv_stream_writer
     volumes:
       - ./backend:/app
     ports:
