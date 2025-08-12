@@ -44,7 +44,6 @@ services:
       "
 
   rest:
-
     image: tabulario/iceberg-rest:1.5.0
     container_name: iceberg-rest
     networks:
@@ -62,7 +61,6 @@ services:
       - minio
 
   create_table:
-
     build:
       context: ./backend
       dockerfile: Dockerfile.create_table
@@ -163,13 +161,8 @@ services:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: jobmanager
-        taskmanager.numberOfTaskSlots: 32
-        parallelism.default: 128
-        execution.checkpointing.interval: 30s
-        execution.checkpointing.timeout: 5m
-        execution.checkpointing.unaligned: true
-        state.backend: rocksdb
-        state.checkpoints.dir: file:///tmp/flink-chk   # 로컬 개발용 (운영은 S3/MinIO)
+        taskmanager.numberOfTaskSlots: 4
+        parallelism.default: 2
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=password
       - AWS_REGION=us-east-1
@@ -217,34 +210,6 @@ services:
       - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
     ports:
       - 8888:8888
-
-
-
-  # event_loader:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile.event_loader
-  #   container_name: sv_event_loader
-  #   volumes:
-  #     - ./backend:/app
-  #   networks:
-  #     iceberg_net:
-  #   environment:
-  #     - AWS_ACCESS_KEY_ID=admin
-  #     - AWS_SECRET_ACCESS_KEY=password
-  #     - AWS_REGION=us-east-1
-  #     - PYICEBERG_CATALOG__DEFAULT__URI=http://iceberg-rest:8181
-  #     - PYICEBERG_CATALOG__DEFAULT__IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
-  #     - PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT=http://minio:9000
-  #     - PYICEBERG_CATALOG__DEFAULT__TYPE=rest
-
-
-
-
-
-
-
-
 
 networks:
   iceberg_net:
