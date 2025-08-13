@@ -53,6 +53,13 @@ try:
         )
         df = df.sort_values("timestamp", ascending=False)
 
+    # ts, ts_hour도 서울 시간대로 변환 (UTC → Asia/Seoul)
+    if 'ts' in df.columns:
+        df["ts"] = df["ts"].dt.tz_convert("Asia/Seoul")
+
+    if 'ts_hour' in df.columns:
+        df["ts_hour"] = df["ts_hour"].dt.tz_convert("Asia/Seoul")
+
     # 🔷 Raw Data 출력
     st.subheader("📋 Raw Data")
     st.dataframe(df, use_container_width=True)

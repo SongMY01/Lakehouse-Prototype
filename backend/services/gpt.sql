@@ -1,13 +1,8 @@
+./bin/sql-client.sh
 -- =========================================
 -- 0) 세션/전역 옵션
 -- =========================================
-SET 'parallelism.default' = '8';                               -- Kafka 파티션 8 기준
-SET 'execution.checkpointing.interval' = '30 s';
-SET 'execution.checkpointing.timeout'  = '5 min';
-SET 'execution.checkpointing.min-pause' = '5 s';
-SET 'execution.checkpointing.unaligned' = 'true';
-SET 'execution.checkpointing.externalized-checkpoint-retention' = 'RETAIN_ON_CANCELLATION';
-SET 'table.exec.source.idle.timeout' = '5 s';
+
 SET 'table.local-time-zone' = 'Asia/Seoul';
 
 -- =========================================
