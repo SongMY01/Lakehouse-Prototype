@@ -170,6 +170,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.flink
+    deploy:
+      replicas: 2
     image: myflink:1.18.1-extra
     command: taskmanager
     depends_on: [jobmanager]
