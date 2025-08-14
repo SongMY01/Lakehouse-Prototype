@@ -61,15 +61,15 @@ async def root():
     logger.debug("✅ 루트 엔드포인트 호출")
     return {"message": "Hello from FastAPI!"}
 
-if __name__ == "__main__":
-    import uvicorn
+# if __name__ == "__main__":
+#     import uvicorn
 
-    # uvicorn 실행 (.env의 LOG_LEVEL과 동기화, reload 모드로 실행)
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level=log_level.lower(),  # uvicorn은 소문자
-        access_log=False
-    )
+#     # uvicorn 실행 (.env의 LOG_LEVEL과 동기화, reload 모드로 실행)
+#     uvicorn.run(
+#         "main:app",
+#         host="0.0.0.0",
+#         port=8000,
+#         reload=True,
+#         log_level=log_level.lower(),  # uvicorn은 소문자
+#         access_log=False
+#     )
