@@ -124,7 +124,7 @@ services:
   stream_writer:
     build:
       context: ./backend
-    container_name: sv_stream_writer
+    container_name: stream_writer
     volumes:
       - ./backend:/app
     ports:
@@ -239,6 +239,25 @@ services:
     ports:
       - 8889:8888
 
+  k6:
+    image: grafana/k6:latest
+    profiles: ["test"]
+    depends_on:
+      - stream_writer
+    networks:
+      - iceberg_net
+    volumes:
+      - ./backend/tests:/scripts:ro   # ← 여기에 e2e_http_events.js 두었죠
+    environment:
+      - RATE=10000        # 총 EPS (원하는 값으로 수정/실행 시 -e로 override 가능)
+      - DURATION=5m       # 테스트 지속 시간
+      - URL=http://stream_writer:8000/api/events   # ← 같은 네트워크의 백엔드 서비스명
+      - PRE_VUS=2000
+      - MAX_VUS=8000
+    command: >
+      run /scripts/e2e_http_events.js
+
 networks:
   iceberg_net:
+    name: iceberg_net
     driver: bridge
