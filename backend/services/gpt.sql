@@ -14,6 +14,8 @@ USE CATALOG default_catalog;
 USE default_database;
 
 CREATE TEMPORARY TABLE mouse_events_src (
+  shape STRING,
+  event_type STRING,
   altKey BOOLEAN,
   ctrlKey BOOLEAN,
   metaKey BOOLEAN,
@@ -27,14 +29,11 @@ CREATE TEMPORARY TABLE mouse_events_src (
   screenX INT,
   screenY INT,
   `timestamp`  BIGINT,                          -- 원본 ms
-  event_type STRING,
-  canvasId STRING,
   canvasX DOUBLE,
   canvasY DOUBLE,
   movementX DOUBLE,
   movementY DOUBLE,
   isTrusted BOOLEAN,
-  shape STRING,
   ts AS TO_TIMESTAMP_LTZ(`timestamp`, 3),       -- 이벤트타임
   WATERMARK FOR ts AS ts - INTERVAL '3' SECOND  -- 지연 허용 3초
 ) WITH (
@@ -101,6 +100,8 @@ DROP TABLE IF EXISTS user_events.mouse_events;
 DROP TABLE IF EXISTS user_events.keydown_events;
 
 CREATE TABLE user_events.mouse_events (
+  shape STRING,
+  event_type STRING,
   altKey BOOLEAN,
   ctrlKey BOOLEAN,
   metaKey BOOLEAN,
@@ -114,14 +115,11 @@ CREATE TABLE user_events.mouse_events (
   screenX INT,
   screenY INT,
   `timestamp`  BIGINT,                  -- 원본 이벤트 ms
-  event_type STRING,
-  canvasId STRING,
   canvasX DOUBLE,
   canvasY DOUBLE,
   movementX DOUBLE,
   movementY DOUBLE,
   isTrusted BOOLEAN,
-  shape STRING,
   ts TIMESTAMP_LTZ(3),                  -- 이벤트타임
   ts_hour TIMESTAMP_LTZ(3)              -- 시간 파티션 키
 )
@@ -157,13 +155,12 @@ WITH (
 -- =========================================
 INSERT INTO iceberg.user_events.mouse_events
 SELECT
-  altKey, ctrlKey, metaKey, shiftKey,
+  shape, event_type, altKey, ctrlKey, metaKey, shiftKey,
   button, buttons,
   clientX, clientY, pageX, pageY, screenX, screenY,
-  `timestamp`, event_type, canvasId,
+  `timestamp`, 
   canvasX, canvasY, movementX, movementY,
-  isTrusted, shape,
-  ts,
+  isTrusted, ts,
   CAST(FLOOR(ts TO HOUR) AS TIMESTAMP_LTZ(3)) AS ts_hour
 FROM default_catalog.default_database.mouse_events_src;
 

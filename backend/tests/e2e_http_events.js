@@ -57,7 +57,7 @@ function rnd(n) { return Math.floor(Math.random() * n); }
 function makeMouse() {
   const now = Date.now();
   const payload = {
-    canvasId: 'main-annotation-canvas',
+    shape: null,
     stream: 'mouse',
     event_type: 'mousemove', // 필요하면 아래 배열에서 랜덤 선택 가능
     // event_type: ['mousemove','click','dblclick','contextmenu','mousedown','mouseup','mouseover','mouseout','mouseenter','mouseleave'][rnd(10)],
@@ -79,7 +79,6 @@ function makeMouse() {
     metaKey: Math.random() < 0.1,
     timestamp: now,
     isTrusted: true,
-    shape: null,
   };
   // 크기 근사 패딩(전송량 맞추기용)
   const curr = JSON.stringify(payload).length;
