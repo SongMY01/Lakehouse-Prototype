@@ -11,12 +11,13 @@ from kafka import KafkaProducer, KafkaConsumer
 
 logger = logging.getLogger(__name__)
 
-# Kafka 브로커 주소
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "sv_kafka:29092")
+# Kafka 브로커 주소들 (쉼표 구분 문자열 → 리스트 변환)
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "broker-1:19092,broker-2:19092,broker-3:19092")
+KAFKA_BROKER_LIST = [host.strip() for host in KAFKA_BROKER.split(",")]
 
-# 프로그램 로드 시 1회 생성 → 재사용
+# KafkaProducer 객체 (싱글턴)
 producer = KafkaProducer(
-    bootstrap_servers=[KAFKA_BROKER],
+    bootstrap_servers=KAFKA_BROKER_LIST,
     value_serializer=lambda v: json.dumps(v, separators=(",", ":"), ensure_ascii=False).encode("utf-8"),
     key_serializer=lambda k: str(k).encode("utf-8") if k else None,
     acks="all",
@@ -29,15 +30,14 @@ producer = KafkaProducer(
     client_id="backend-producer-01",
     max_request_size=1048576
 )
+
 def get_kafka_producer():
-    """싱글턴 KafkaProducer 반환"""
     return producer
 
-# Kafka Consumer 생성 함수
 def create_kafka_consumer(topic_name):
     return KafkaConsumer(
         topic_name,
-        bootstrap_servers=KAFKA_BROKER,
+        bootstrap_servers=KAFKA_BROKER_LIST,
         auto_offset_reset="earliest",
         enable_auto_commit=False,
         value_deserializer=lambda m: json.loads(m.decode("utf-8")),
