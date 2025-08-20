@@ -32,7 +32,7 @@ export const options = {
         { duration: '20s', target: Math.ceil(RATE * 0.8) },
         { duration: '20s', target: RATE },
       ],
-      gracefulStop: '10s',
+      gracefulStop: '7s',
     },
     steady: {
       executor: 'constant-arrival-rate',
@@ -42,7 +42,7 @@ export const options = {
       preAllocatedVUs: PRE_VUS,
       maxVUs: MAX_VUS,
       startTime: '1m30s',
-      gracefulStop: '10s',
+      gracefulStop: '5s',
     },
   },
   thresholds: {

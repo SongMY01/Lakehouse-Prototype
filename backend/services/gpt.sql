@@ -39,8 +39,8 @@ CREATE TEMPORARY TABLE mouse_events_src (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'mouse_events',
-  'properties.bootstrap.servers' = 'sv_kafka:29092',
-  'properties.group.id' = 'flink-consumer-mouse-p8',
+  'properties.bootstrap.servers' = 'broker-1:19092,broker-2:19092,broker-3:19092',
+  'properties.group.id' = 'flink-consumer-mouse-p1',
   'scan.startup.mode' = 'latest-offset',                 -- 필요시 earliest-offset
   'scan.topic-partition-discovery.interval' = '60 s',
   'format' = 'json',
@@ -65,8 +65,8 @@ CREATE TEMPORARY TABLE keydown_events_src (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'keydown_events',
-  'properties.bootstrap.servers' = 'sv_kafka:29092',
-  'properties.group.id' = 'flink-consumer-key-p8',
+  'properties.bootstrap.servers' = 'broker-1:19092,broker-2:19092,broker-3:19092',
+  'properties.group.id' = 'flink-consumer-key-p1',
   'scan.startup.mode' = 'latest-offset',
   'scan.topic-partition-discovery.interval' = '60 s',
   'format' = 'json',
