@@ -381,8 +381,8 @@ services:
     volumes:
       - ./backend/tests:/scripts:ro   # ← 여기에 e2e_http_events.js 두었죠
     environment:
-      - RATE=1000        # 총 EPS (원하는 값으로 수정/실행 시 -e로 override 가능)
-      - DURATION=5m       # 테스트 지속 시간
+      - RATE=20000        # 총 EPS (원하는 값으로 수정/실행 시 -e로 override 가능)
+      - DURATION=2m       # 테스트 지속 시간
       - URL=http://stream_writer:8000/api/events   # ← 같은 네트워크의 백엔드 서비스명
       - PRE_VUS=2000
       - MAX_VUS=8000
