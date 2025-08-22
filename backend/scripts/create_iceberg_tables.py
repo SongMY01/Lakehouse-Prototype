@@ -11,8 +11,9 @@ from schemas.keydown_event import define_keyboard_schema
 
 # Map event types to their schema functions
 EVENT_SCHEMAS = [
-    ("mouse", define_mouse_schema),
-    ("keydown", define_keyboard_schema),
+    # ("mouse", define_mouse_schema),
+    # ("keydown", define_keyboard_schema),
+    ("events_bronze", define_keyboard_schema),
 ]
 
 
@@ -31,7 +32,7 @@ def main():
     print("📚 Loading Iceberg catalog...")
 
     for event, schema_fn in EVENT_SCHEMAS:
-        table_name = f"user_events.{event}_events"
+        table_name = f"user_events.{event}"
         create_table(catalog, table_name, schema_fn())
 
     print("✅ Iceberg 테이블 생성 완료!")
