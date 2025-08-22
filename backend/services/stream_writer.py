@@ -23,8 +23,8 @@ async def write_to_stream(data: dict):
     Returns:
         dict: 기록 결과 상태 및 메타 정보
     """
-    event_type = data.get("stream", "unknown")
-    topic_name = f"{event_type}_events"
+    event_type = data.get("type", "unknown")
+    topic_name = 'user_events'
 
     # Kafka 전송
     producer.send(topic_name, key=None, value=data)

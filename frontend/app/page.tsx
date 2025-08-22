@@ -12,6 +12,61 @@ const measureBytes = (obj: unknown): number => {
   }
 }
 
+// === test.tsx 스타일: 이벤트 직렬화 & 전송 ===
+function serializeEvent(e: Event): Record<string, any> {
+  // Robust epoch timestamp derivation
+  const rawTs = (e as any).timeStamp
+  const isNumber = typeof rawTs === 'number' && Number.isFinite(rawTs)
+  const navStart = (performance as any)?.timeOrigin ?? (performance as any)?.timing?.navigationStart
+  const epochMs = (() => {
+    if (!isNumber) return Date.now()
+    // If the browser gives high-res relative ts (typically < 1e12), convert using timeOrigin
+    if (rawTs < 1e12) {
+      const base = typeof navStart === 'number' ? navStart : Date.now() - rawTs
+      return Math.round(base + rawTs)
+    }
+    // Some browsers already provide epoch ms
+    return Math.round(rawTs)
+  })()
+
+  const obj: Record<string, any> = {
+    type: e.type,
+    timeStamp: epochMs,
+  }
+
+  // target 정보 최소화 저장
+  if (e.target instanceof HTMLElement) {
+    obj.target = {
+      tag: e.target.tagName,
+      id: e.target.id,
+      className: e.target.className,
+    }
+  }
+
+  // enumerable 속성 자동 복사 (함수/객체 제외)
+  for (const key in e as any) {
+    try {
+      const val = (e as any)[key]
+      if (typeof val !== 'function' && typeof val !== 'object') {
+        // 충돌 방지: 위에서 이미 세팅한 키는 덮어쓰지 않음
+        if (!(key in obj)) obj[key] = val
+      }
+    } catch {}
+  }
+
+  return obj
+}
+
+function enqueueLog(payload: Record<string, any>) {
+  fetch('http://localhost:8000/api/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch((err) => {
+    console.error('Failed to send event:', err)
+  })
+}
+
 // === Types ===
 type Point = { x: number; y: number }
 
@@ -22,20 +77,20 @@ type Shape =
 
 // === Demo Data ===
 const demoShapes: Shape[] = [
-  { type: 'rect', id: 's1', x: 50, y: 50, w: 100, h: 100, label: 'Car', color: '#22d3ee' }, // Vehicle example
-  { type: 'circle', id: 's2', x: 200, y: 200, r: 50, label: 'Person', color: '#34d399' }, // Pedestrian example
+  { type: 'rect', id: 's1', x: 50, y: 50, w: 100, h: 100, label: 'Car', color: '#22d3ee' },
+  { type: 'circle', id: 's2', x: 200, y: 200, r: 50, label: 'Person', color: '#34d399' },
   {
     type: 'triangle',
     id: 's3',
     points: [
       { x: 300, y: 50 },
       { x: 350, y: 150 },
-      { x: 250, y: 150 }
+      { x: 250, y: 150 },
     ],
     label: 'Yield Sign',
-    color: '#fbbf24'
+    color: '#fbbf24',
   },
-  { type: 'rect', id: 's4', x: 100, y: 300, w: 120, h: 80, label: 'Red Light', color: '#a78bfa' } // Traffic Light example
+  { type: 'rect', id: 's4', x: 100, y: 300, w: 120, h: 80, label: 'Red Light', color: '#a78bfa' },
 ]
 
 // === Component ===
@@ -54,10 +109,11 @@ export default function AutomotiveLabeler() {
       { key: 'vehicle', name: 'Vehicle', color: '#22d3ee', icon: Car },
       { key: 'pedestrian', name: 'Pedestrian', color: '#34d399', icon: Waypoints },
       { key: 'traffic_sign', name: 'Traffic Sign', color: '#fbbf24', icon: Triangle },
-      { key: 'traffic_light', name: 'Traffic Light', color: '#a78bfa', icon: Activity }
+      { key: 'traffic_light', name: 'Traffic Light', color: '#a78bfa', icon: Activity },
     ],
     []
   )
+
   // === Drawing Helpers ===
   const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
     ctx.save()
@@ -138,7 +194,8 @@ export default function AutomotiveLabeler() {
         const textWidth = ctx.measureText(label).width
         const padX = 6
         const padY = 3
-        let lx = 0, ly = 0
+        let lx = 0,
+          ly = 0
         if (shape.type === 'rect') {
           lx = shape.x
           ly = shape.y - 8
@@ -155,6 +212,7 @@ export default function AutomotiveLabeler() {
         ctx.strokeStyle = base
         ctx.lineWidth = 1
         ctx.beginPath()
+        //@ts-ignore roundRect 지원 브라우저
         ctx.roundRect(lx - padX, ly - 12 - padY, textWidth + padX * 2, 18, 6)
         ctx.fill()
         ctx.stroke()
@@ -191,23 +249,7 @@ export default function AutomotiveLabeler() {
     [shapes]
   )
 
-  // === Networking ===
-  const sendPayload = async (payload: any) => {
-    const size = measureBytes(payload)
-    setPayloadSize(size)
-    setLastEvent(payload)
-    try {
-      await fetch('http://localhost:8000/api/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-    } catch (err) {
-      console.error('Event send failed:', err)
-    }
-  }
-
-  // === Mouse Handling ===
+  // === Mouse Handling (로컬 UI 상태만 업데이트) ===
   const handleMouseEvent = (e: React.MouseEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -220,38 +262,7 @@ export default function AutomotiveLabeler() {
     setHoverId(hit?.id ?? null)
     if (e.type === 'mousedown' && hit) setActiveId(hit.id)
     if (e.type === 'mouseup') setActiveId((prev) => (prev && !hit ? null : prev))
-
-    const payload = {
-      shape: hit 
-      ? {
-        id: hit.id,
-        type: hit.type,
-        label: hit.label ?? null,   // ✅ label 추가
-        color: hit.color ?? null
-      }
-      : null,
-      stream: 'mouse',
-      event_type: e.type,
-      canvasX: x,
-      canvasY: y,
-      clientX: e.clientX,
-      clientY: e.clientY,
-      pageX: e.pageX,
-      pageY: e.pageY,
-      screenX: e.screenX,
-      screenY: e.screenY,
-      movementX: e.movementX,
-      movementY: e.movementY,
-      button: e.button,
-      buttons: e.buttons,
-      ctrlKey: e.ctrlKey,
-      altKey: e.altKey,
-      shiftKey: e.shiftKey,
-      metaKey: e.metaKey,
-      timestamp: Date.now(),
-      isTrusted: e.isTrusted,
-    }
-    sendPayload(payload)
+    // ✅ 네트워킹은 전역 이벤트 로거가 담당(serializeEvent + enqueueLog)
   }
 
   // === Draw Loop ===
@@ -264,26 +275,67 @@ export default function AutomotiveLabeler() {
     drawShapes(ctx)
   }, [shapes, hoverId, activeId])
 
-  // === Keyboard ===
+  // === test.tsx 스타일: 전역 이벤트 로거 ===
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const payload = {
-        stream: 'keydown',
-        key: e.key,
-        code: e.code,
-        altKey: e.altKey,
-        ctrlKey: e.ctrlKey,
-        shiftKey: e.shiftKey,
-        metaKey: e.metaKey,
-        timestamp: Date.now(),
-        type: e.type
+    const allEventTypes = Object.keys(window)
+      .filter((k) => k.startsWith('on'))
+      .map((k) => k.slice(2))
+
+    const handler = (e: Event) => {
+      const payload = serializeEvent(e)
+
+      // 캔버스 상호작용이면 캔버스 상대 좌표 & 히트 정보 보강 (선택적 확장)
+      const target = e.target as HTMLElement | null
+      if (target && target === canvasRef.current) {
+        const rect = canvasRef.current!.getBoundingClientRect()
+        const mx = (e as any).clientX - rect.left
+        const my = (e as any).clientY - rect.top
+        const hit = hitTest(mx, my)
+        ;(payload as any)._canvas = {
+          canvasX: Math.round(mx),
+          canvasY: Math.round(my),
+          shape: hit
+            ? { id: hit.id, type: hit.type, label: hit.label ?? null, color: hit.color ?? null }
+            : null,
+        }
       }
-      sendPayload(payload)
-      log('DEBUG', '키보드 이벤트 전송:', payload)
+
+      // Send policy (mouse/pointer only gated by canvas hit; others sent globally)
+      const isCanvasEvent = target && target === canvasRef.current
+      const t = String(payload.type || '')
+      const isMousePointer = t.startsWith('mouse') || t.startsWith('pointer')
+      const hitShape = (payload as any)._canvas?.shape ?? null
+
+      if (isMousePointer) {
+        // For mouse/pointer events, send only when on canvas AND a shape is hit
+        if (isCanvasEvent && hitShape) {
+          setLastEvent(payload)
+          setPayloadSize(measureBytes(payload))
+          enqueueLog(payload)
+        }
+      } else {
+        // All other events (keyboard, focus, visibility, etc.)
+        setLastEvent(payload)
+        setPayloadSize(measureBytes(payload))
+        enqueueLog(payload)
+      }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+
+    // 가능한 모든 이벤트 타입 등록
+    allEventTypes.forEach((type) => {
+      try {
+        window.addEventListener(type as any, handler, { passive: true })
+      } catch {}
+    })
+
+    return () => {
+      allEventTypes.forEach((type) => {
+        try {
+          window.removeEventListener(type as any, handler as any)
+        } catch {}
+      })
+    }
+  }, [hitTest])
 
   // === UI ===
   return (
@@ -292,12 +344,7 @@ export default function AutomotiveLabeler() {
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <img
-              src="/strad_logo.svg"
-              width={50}
-              height={50}
-              className="h-5 w-5 object-contain"
-            />
+            <img src="/strad_logo.svg" width={50} height={50} className="h-5 w-5 object-contain" />
             <span className="text-sm uppercase tracking-widest text-slate-400">Stradvision</span>
             <span className="text-sm font-semibold text-slate-100">Labelit</span>
             <BadgeCheck className="ml-2 h-4 w-4 text-emerald-400" />
@@ -328,11 +375,7 @@ export default function AutomotiveLabeler() {
                 <span className="flex items-center gap-2">
                   <c.icon className="h-4 w-4" /> {c.name}
                 </span>
-                <span
-                  className="h-3 w-3 rounded"
-                  style={{ background: c.color }}
-                  aria-hidden
-                />
+                <span className="h-3 w-3 rounded" style={{ background: c.color }} aria-hidden />
               </button>
             ))}
           </div>
@@ -340,9 +383,15 @@ export default function AutomotiveLabeler() {
           <div className="mt-4 h-px bg-slate-800" />
 
           <div className="mt-4 space-y-2 text-xs text-slate-400">
-            <div className="flex items-center gap-2"><Keyboard className="h-3.5 w-3.5" /> H: Toggle help, Del: Remove</div>
-            <div className="flex items-center gap-2"><Move3D className="h-3.5 w-3.5" /> Drag to move, Double-click to select</div>
-            <div className="flex items-center gap-2"><Ruler className="h-3.5 w-3.5" /> Grid 10/50px snapping</div>
+            <div className="flex items-center gap-2">
+              <Keyboard className="h-3.5 w-3.5" /> H: Toggle help, Del: Remove
+            </div>
+            <div className="flex items-center gap-2">
+              <Move3D className="h-3.5 w-3.5" /> Drag to move, Double-click to select
+            </div>
+            <div className="flex items-center gap-2">
+              <Ruler className="h-3.5 w-3.5" /> Grid 10/50px snapping
+            </div>
           </div>
         </aside>
 
@@ -350,22 +399,49 @@ export default function AutomotiveLabeler() {
         <main className="flex flex-col gap-3">
           {/* Tool Bar */}
           <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-2">
-            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700"><MousePointerClick className="mr-2 inline h-4 w-4"/>Select</button>
-            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700"><Square className="mr-2 inline h-4 w-4"/>Box</button>
-            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700"><Circle className="mr-2 inline h-4 w-4"/>Circle</button>
-            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700"><Triangle className="mr-2 inline h-4 w-4"/>Polygon</button>
+            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700">
+              <MousePointerClick className="mr-2 inline h-4 w-4" />
+              Select
+            </button>
+            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700">
+              <Square className="mr-2 inline h-4 w-4" />
+              Box
+            </button>
+            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700">
+              <Circle className="mr-2 inline h-4 w-4" />
+              Circle
+            </button>
+            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700">
+              <Triangle className="mr-2 inline h-4 w-4" />
+              Polygon
+            </button>
             <div className="ml-auto flex items-center gap-2">
-              <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700"><Save className="mr-2 inline h-4 w-4"/>Save</button>
-              <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700"><Upload className="mr-2 inline h-4 w-4"/>Import</button>
-              <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700"><Download className="mr-2 inline h-4 w-4"/>Export</button>
+              <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700">
+                <Save className="mr-2 inline h-4 w-4" />
+                Save
+              </button>
+              <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700">
+                <Upload className="mr-2 inline h-4 w-4" />
+                Import
+              </button>
+              <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200 hover:border-slate-700">
+                <Download className="mr-2 inline h-4 w-4" />
+                Export
+              </button>
             </div>
           </div>
 
           {/* Canvas Stage */}
           <div className="relative rounded-2xl border border-slate-800 bg-slate-900/50 p-3">
             <div className="absolute inset-x-3 top-3 z-10 flex items-center justify-between text-xs text-slate-400">
-              <span className="flex items-center gap-2"><Inspect className="h-4 w-4"/> scene_0001.png <span className="rounded bg-slate-800/80 px-2 py-0.5 text-[10px]">400×400</span></span>
-              <span className="rounded-xl border border-slate-800 bg-slate-900 px-2 py-1">Cursor: <b className="ml-1 text-slate-200">{mousePos.x}</b>, <b className="text-slate-200">{mousePos.y}</b></span>
+              <span className="flex items-center gap-2">
+                <Inspect className="h-4 w-4" /> scene_0001.png{' '}
+                <span className="rounded bg-slate-800/80 px-2 py-0.5 text-[10px]">400×400</span>
+              </span>
+              <span className="rounded-xl border border-slate-800 bg-slate-900 px-2 py-1">
+                Cursor: <b className="ml-1 text-slate-200">{mousePos.x}</b>,{' '}
+                <b className="text-slate-200">{mousePos.y}</b>
+              </span>
             </div>
 
             <canvas
@@ -373,30 +449,47 @@ export default function AutomotiveLabeler() {
               width={400}
               height={400}
               onClick={handleMouseEvent}
-              onMouseDown={(e) => { setCursor('grabbing'); handleMouseEvent(e) }}
-              onMouseUp={(e) => { setCursor('crosshair'); handleMouseEvent(e) }}
+              onMouseDown={(e) => {
+                setCursor('grabbing')
+                handleMouseEvent(e)
+              }}
+              onMouseUp={(e) => {
+                setCursor('crosshair')
+                handleMouseEvent(e)
+              }}
               onDoubleClick={handleMouseEvent}
               onMouseMove={handleMouseEvent}
               onMouseOver={handleMouseEvent}
               onMouseOut={handleMouseEvent}
               onMouseEnter={handleMouseEvent}
               onMouseLeave={handleMouseEvent}
-              onContextMenu={(e) => { e.preventDefault(); handleMouseEvent(e) }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                handleMouseEvent(e)
+              }}
               className={`mx-auto block cursor-${cursor} rounded-xl bg-slate-950 shadow-inner`}
             />
 
             {/* Status Strip */}
             <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-2">Active: <b className="ml-1 text-slate-100">{activeId ?? '—'}</b></div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-2">Hover: <b className="ml-1 text-slate-100">{hoverId ?? '—'}</b></div>
-              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-2">Payload: <b className="ml-1 text-slate-100">{payloadSize}</b> bytes</div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-2">
+                Active: <b className="ml-1 text-slate-100">{activeId ?? '—'}</b>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-2">
+                Hover: <b className="ml-1 text-slate-100">{hoverId ?? '—'}</b>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-2">
+                Payload: <b className="ml-1 text-slate-100">{payloadSize}</b> bytes
+              </div>
             </div>
           </div>
         </main>
 
         {/* Right Sidebar: Event Stream */}
         <aside className="flex max-h-[560px] flex-col gap-2 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 p-3">
-          <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wider text-slate-400"><PackageSearch className="h-4 w-4"/> Event Stream</div>
+          <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wider text-slate-400">
+            <PackageSearch className="h-4 w-4" /> Event Stream
+          </div>
           <div className="scrollbar-thin scrollbar-thumb-slate-700/50 scrollbar-track-transparent min-h-0 flex-1 overflow-auto rounded-xl border border-slate-800 bg-slate-950 p-2">
             {lastEvent ? (
               <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300">{JSON.stringify(lastEvent, null, 2)}</pre>
@@ -405,9 +498,15 @@ export default function AutomotiveLabeler() {
             )}
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:border-slate-700"><Save className="mr-1 inline h-3.5 w-3.5"/> Save</button>
-            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:border-slate-700"><Upload className="mr-1 inline h-3.5 w-3.5"/> Import</button>
-            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:border-slate-700"><Download className="mr-1 inline h-3.5 w-3.5"/> Export</button>
+            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:border-slate-700">
+              <Save className="mr-1 inline h-3.5 w-3.5" /> Save
+            </button>
+            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:border-slate-700">
+              <Upload className="mr-1 inline h-3.5 w-3.5" /> Import
+            </button>
+            <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:border-slate-700">
+              <Download className="mr-1 inline h-3.5 w-3.5" /> Export
+            </button>
           </div>
         </aside>
       </div>
@@ -416,11 +515,17 @@ export default function AutomotiveLabeler() {
       <footer className="border-t border-slate-800 bg-slate-950/80">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2 text-[11px] text-slate-400">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1"><Car className="h-3.5 w-3.5"/> Automotive Labeling Theme</span>
-            <span className="flex items-center gap-1"><Waypoints className="h-3.5 w-3.5"/> Crosshair + Grid</span>
+            <span className="flex items-center gap-1">
+              <Car className="h-3.5 w-3.5" /> Automotive Labeling Theme
+            </span>
+            <span className="flex items-center gap-1">
+              <Waypoints className="h-3.5 w-3.5" /> Crosshair + Grid
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1"><Cpu className="h-3.5 w-3.5"/> v0.1</span>
+            <span className="flex items-center gap-1">
+              <Cpu className="h-3.5 w-3.5" /> v0.1
+            </span>
           </div>
         </div>
       </footer>

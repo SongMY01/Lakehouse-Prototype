@@ -31,7 +31,7 @@ st.set_page_config(page_title="User Events Dashboard", layout="wide")
 st.title("🎯 User Events Dashboard")
 
 # 🔷 테이블 선택 (클릭/키다운)
-table_choice = st.selectbox("📋 테이블 선택", options=["mouse_events", "keydown_events"])
+table_choice = st.selectbox("📋 테이블 선택", options=["events_bronze"])
 TABLE_NAME = f"{NAMESPACE}.{table_choice}"
 
 # 🔷 최신 데이터 갱신 버튼
@@ -45,13 +45,13 @@ try:
     arrow_table = table.scan().to_arrow()
     df = arrow_table.to_pandas()
 
-    # timestamp 컬럼 처리 (서울 시간대로 변환 후 최신순 정렬)
-    if 'timestamp' in df.columns:
-        df["timestamp"] = (
-            pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    # timeStamp 컬럼 처리 (서울 시간대로 변환 후 최신순 정렬)
+    if 'timeStamp' in df.columns:
+        df["timeStamp"] = (
+            pd.to_datetime(df["timeStamp"], unit="ms", utc=True)
             .dt.tz_convert("Asia/Seoul")
         )
-        df = df.sort_values("timestamp", ascending=False)
+        df = df.sort_values("timeStamp", ascending=False)
 
     # ts, ts_hour도 서울 시간대로 변환 (UTC → Asia/Seoul)
     if 'ts' in df.columns:
@@ -62,13 +62,13 @@ try:
 
     # 🔷 Raw Data 출력
     st.subheader("📋 Raw Data")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df.head(1000), use_container_width=True)
 
     # 🔷 타임스탬프 분포 차트
-    st.subheader("🕒 Timestamp Distribution")
+    st.subheader("🕒 timeStamp Distribution")
     if not df.empty:
-        df.set_index("timestamp", inplace=True)
-        st.line_chart(df.resample("1min").size())
+        df.set_index("timeStamp", inplace=True)
+        st.line_chart(df.resample("1min").size().tail(180))
     else:
         st.info("데이터가 없습니다.")
 
